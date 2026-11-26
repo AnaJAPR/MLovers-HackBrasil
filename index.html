@@ -117,6 +117,8 @@
   .state.run::before { content: "◌ "; display: inline-block; animation: spin .9s linear infinite; }
   .state.ok { color: var(--good); }
   .state.err { color: var(--bad); }
+  .age { font-size: 12px; color: var(--muted); }
+  .age.stale { color: var(--warn); }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* score + recomendacoes */
@@ -257,6 +259,7 @@
         </select>
         <button class="btn" data-post="/api/web-extract/" data-platform="1">2 · Extrair da web</button>
       </div>
+      <span class="age" id="web-extract-age"></span>
       <span class="state" aria-live="polite"></span>
     </div>
     <div class="action">
@@ -398,6 +401,21 @@
     });
   }
 
+  function renderWebAge() {
+    const box = $("#web-extract-age");
+    const raw = status && status.web_extraction ? status.web_extraction[$("#platform").value] : null;
+    const when = raw ? new Date(raw) : null;
+    if (!when || isNaN(when)) {
+      box.className = "age stale";
+      box.textContent = "última extração: nunca · recomendado atualizar";
+      return;
+    }
+    const days = Math.max(0, Math.floor((Date.now() - when.getTime()) / 86400000));
+    const stale = days > 15;
+    box.className = "age" + (stale ? " stale" : "");
+    box.textContent = `última extração: há ${days} ${days === 1 ? "dia" : "dias"}` + (stale ? " · recomendado atualizar" : "");
+  }
+
   function render() {
     const d = status && status.diagnostics;
     const conv = (status && status.conversations) || 0;
@@ -414,6 +432,7 @@
     $("#vault-path").title = vault;
     $("#open-obsidian").href = vault ? "obsidian://open?path=" + encodeURIComponent(vault) : "obsidian://open";
     renderFrontier();
+    renderWebAge();
 
     if (!d) {
       $("#score-value").textContent = "—";
@@ -585,6 +604,7 @@
   }
 
   $("#host").textContent = location.host;
+  $("#platform").addEventListener("change", renderWebAge);
   loadStatus();
 </script>
 </body>

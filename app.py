@@ -129,9 +129,15 @@ def api_status():
         frontier = frontier if isinstance(frontier, list) else []
     except Exception:
         frontier = []
+    try:
+        web_extraction = json.loads((BASE / "data" / "web_extraction_state.json").read_text(encoding="utf-8-sig"))
+        web_extraction = web_extraction if isinstance(web_extraction, dict) else {}
+    except Exception:
+        web_extraction = {}
     vault = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or Path.home() / "AIWikiVault").expanduser()
     return {"diagnostics": diagnostics, "mock": mock, "error": error, "conversations": conversations,
-            "vault": str(vault), "frontier": frontier, "frontier_mock": frontier_mock}
+            "vault": str(vault), "frontier": frontier, "frontier_mock": frontier_mock,
+            "web_extraction": web_extraction}
 
 
 if __name__ == "__main__":

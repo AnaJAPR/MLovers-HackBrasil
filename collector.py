@@ -392,19 +392,21 @@ def run_web_extraction(platform, limit=50, force=False):
                     text = msg.result or ""
             if "AGUARDANDO_LOGIN" not in text:
                 return text
-            print("[web] agente: AGUARDANDO_LOGIN (tela de login detectada)")
-            print("\n[web] o Chrome precisa que voce esteja logado.")
-            try:
-                input("Faça login na janela do Chrome que abriu e aperte Enter aqui")
-            except EOFError:
-                return None
-            await client.query(
-                "O usuario fez login. Continue: recarregue a pagina na mesma janela do Chrome, confirme que"
-                " a tela de login nao aparece mais e conclua a extracao no destino combinado."
-            )
-            async for msg in client.receive_response():
-                if isinstance(msg, ResultMessage):
-                    text = msg.result or ""
+            # Pausa humana: o usuario loga na janela do Chrome; o agente confere a cada 15s (ate 5 min).
+            # Funciona igual chamado pelo app (botao) ou pela CLI, sem depender do terminal.
+            print("[web] tela de login detectada: faca login na janela do Chrome que abriu (aguardo ate 5 min)")
+            for _ in range(20):
+                await anyio.sleep(15)
+                await client.query(
+                    "Confira a pagina atual (take_snapshot). Se ainda estiver na tela de login, responda so"
+                    " AGUARDANDO_LOGIN. Se o usuario ja fez login, conclua a extracao no destino combinado."
+                )
+                async for msg in client.receive_response():
+                    if isinstance(msg, ResultMessage):
+                        text = msg.result or ""
+                if "AGUARDANDO_LOGIN" not in text:
+                    return text
+            return None
         return text
 
     try:

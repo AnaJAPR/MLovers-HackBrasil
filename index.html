@@ -302,7 +302,7 @@
 
   <footer>
     <span>Vault: <span id="vault-path">—</span></span>
-    <span>100% local · 127.0.0.1:8765 · grafo exposto via MCP</span>
+    <span>100% local · <span id="host">127.0.0.1</span> · grafo exposto via MCP</span>
   </footer>
 </main>
 
@@ -341,7 +341,9 @@
     if (!d) {
       $("#score-value").textContent = "—";
       $("#score-label").textContent = "Sem diagnóstico ainda";
-      $("#generated").textContent = "Rode “3 · Diagnosticar” para gerar o relatório.";
+      $("#generated").textContent = status.error
+        ? "erro ao ler o diagnóstico: " + status.error
+        : "Rode “3 · Diagnosticar” para gerar o relatório.";
       $("#metrics").innerHTML = "";
       $("#recs").innerHTML = '<li class="empty">Nenhuma recomendação ainda.</li>';
       $("#diagnoses").innerHTML = '<p class="empty">Nenhum diagnóstico por conversa ainda.</p>';
@@ -377,12 +379,12 @@
     </div>`;
     $("#metrics").innerHTML = metricsHtml;
 
-    const recs = d.recommendations || [];
+    const recs = Array.isArray(d.recommendations) ? d.recommendations : [];
     $("#recs").innerHTML = recs.length
       ? recs.map((r) => `<li>${esc(r)}</li>`).join("")
       : '<li class="empty">Nenhuma recomendação.</li>';
 
-    const list = d.conversation_diagnoses || [];
+    const list = Array.isArray(d.conversation_diagnoses) ? d.conversation_diagnoses : [];
     $("#diag-count").textContent = list.length ? `(${list.length})` : "";
     $("#diagnoses").innerHTML = list.length
       ? list.map((x) => {
@@ -390,7 +392,7 @@
           const sev = Math.max(1, Math.min(5, Number(x.severity) || 1));
           const sevTone = sev >= 4 ? "bad" : sev >= 3 ? "warn" : "good";
           const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < sev ? "on" : ""}"></i>`).join("");
-          const topics = (x.topics || []).map((t) => `<span>#${esc(t)}</span>`).join("");
+          const topics = (Array.isArray(x.topics) ? x.topics : []).map((t) => `<span>#${esc(t)}</span>`).join("");
           return `<article class="diag">
             <div class="diag-head">
               <span class="chip ${tone}">${esc(label)}</span>
@@ -419,6 +421,15 @@
     }
   }
 
+  const actionError = (data) =>
+    data.error || (data.result && (data.result.error || data.result.reason)) || "erro sem mensagem";
+  const actionDetail = (data) => {
+    const result = data.result;
+    if (Array.isArray(result)) return `ok — ${result.length} item(ns)`;
+    if (result && typeof result === "object" && result.sent === false) return result.reason || "preview salvo";
+    return "ok";
+  };
+
   document.querySelectorAll("button[data-post]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const state = btn.closest(".action").querySelector(".state");
@@ -429,14 +440,9 @@
       try {
         const res = await fetch(url, { method: "POST" });
         const data = await res.json();
-        if (data.ok === false) throw new Error(data.error || "erro sem mensagem");
-        let detail = "ok";
-        if (data.total != null) {
-          const sources = Object.entries(data.by_source || {}).map(([s, n]) => `${s}: ${n}`).join(", ");
-          detail = `ok — ${data.total} conversas${sources ? " (" + sources + ")" : ""}`;
-        }
-        setState(state, "ok", detail);
-        if (["/api/collect", "/api/diagnose", "/api/wiki", "/api/frontier"].includes(btn.dataset.post)) await loadStatus();
+        if (data.ok === false || data.result?.ok === false) throw new Error(actionError(data));
+        setState(state, "ok", actionDetail(data));
+        if (["/api/collect", "/api/web-extract/", "/api/diagnose", "/api/wiki"].includes(btn.dataset.post)) await loadStatus();
       } catch (e) {
         setState(state, "err", "erro: " + e.message);
       } finally {
@@ -454,11 +460,12 @@
     try {
       const res = await fetch("/api/checkout", { method: "POST" });
       const data = await res.json();
-      if (data.ok === false) throw new Error(data.error || "erro sem mensagem");
-      if (!data.url) throw new Error("URL de checkout vazia");
+      if (data.ok === false || data.result?.ok === false) throw new Error(actionError(data));
+      const url = typeof data.result === "string" ? data.result : data.result?.url;
+      if (!url) throw new Error("URL de checkout vazia");
       setState(state, "ok", "ok — abrindo checkout");
-      if (tab) tab.location = data.url;
-      else window.open(data.url, "_blank");
+      if (tab) tab.location = url;
+      else window.open(url, "_blank");
     } catch (e) {
       if (tab) tab.close();
       setState(state, "err", "erro: " + e.message);
@@ -467,6 +474,7 @@
     }
   });
 
+  $("#host").textContent = location.host;
   loadStatus();
 </script>
 </body>

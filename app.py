@@ -1,14 +1,17 @@
 """App desktop local: FastAPI + index.html. Rotas nunca quebram: devolvem {"ok": ...} com status 200."""
 import argparse
+import importlib
 import json
 import os
+import socket
 import threading
+import traceback
 import webbrowser
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse
 
 BASE = Path(__file__).resolve().parent
 try:
@@ -20,6 +23,25 @@ except ImportError:
 app = FastAPI(title="Cognitive Wiki OS")
 
 
+def call(module, func, *args):
+    try:
+        return {"ok": True, "result": getattr(importlib.import_module(module), func)(*args)}
+    except Exception as e:
+        traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
+@app.middleware("http")
+async def local_only(request: Request, call_next):
+    port = request.scope["server"][1]
+    if request.headers.get("host") not in (f"127.0.0.1:{port}", f"localhost:{port}"):
+        return JSONResponse({"ok": False, "error": "host nao permitido"}, status_code=403)
+    origin = request.headers.get("origin")
+    if request.method != "GET" and origin and origin not in (f"http://127.0.0.1:{port}", f"http://localhost:{port}"):
+        return JSONResponse({"ok": False, "error": "origem nao permitida"}, status_code=403)
+    return await call_next(request)
+
+
 @app.get("/")
 def home():
     return FileResponse(BASE / "index.html", media_type="text/html")
@@ -27,91 +49,64 @@ def home():
 
 @app.post("/api/collect")
 def api_collect():
-    try:
-        import collector
-        conversations = collector.collect()
-        by_source = {}
-        for conversation in conversations:
-            source = conversation.get("source", "desconhecido")
-            by_source[source] = by_source.get(source, 0) + 1
-        return {"ok": True, "total": len(conversations), "by_source": by_source}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("collector", "collect")
 
 
 @app.post("/api/web-extract/{platform}")
 def api_web_extract(platform: str):
     if platform not in ("chatgpt", "claude", "gemini"):
         return {"ok": False, "error": f"plataforma invalida: {platform}"}
-    try:
-        import collector
-        return {"ok": True, "result": collector.run_web_extraction(platform)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("collector", "run_web_extraction", platform)
 
 
 @app.post("/api/diagnose")
 def api_diagnose():
-    try:
-        import diagnostics
-        return {"ok": True, "result": diagnostics.run_cognitive_diagnosis()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("diagnostics", "run_cognitive_diagnosis")
 
 
 @app.post("/api/wiki")
 def api_wiki():
-    try:
-        import obsidian
-        return {"ok": True, "result": obsidian.sync_conversations_to_obsidian()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("obsidian", "sync_conversations_to_obsidian")
 
 
 @app.post("/api/frontier")
 def api_frontier():
-    try:
-        import research
-        return {"ok": True, "result": research.expand_frontier()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("research", "expand_frontier")
 
 
 @app.post("/api/email")
 def api_email():
-    try:
-        import integrations
-        return {"ok": True, "result": integrations.send_report()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("integrations", "send_report")
 
 
 @app.post("/api/checkout")
 def api_checkout():
-    try:
-        import integrations
-        return {"url": integrations.create_checkout()}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    return call("integrations", "create_checkout")
 
 
 @app.get("/api/status")
 def api_status():
     mock = False
-    try:
-        diagnostics = json.loads((BASE / "data" / "diagnostics.json").read_text(encoding="utf-8"))
-    except Exception:
+    error = None
+    diag_path = BASE / "data" / "diagnostics.json"
+    if diag_path.exists():
+        try:
+            diagnostics = json.loads(diag_path.read_text(encoding="utf-8-sig"))
+        except Exception as e:
+            diagnostics, error = None, str(e)
+    else:
         mock = True
         try:
-            diagnostics = json.loads((BASE / "mock" / "diagnostics.json").read_text(encoding="utf-8"))
-        except Exception:
-            diagnostics = None
+            diagnostics = json.loads((BASE / "mock" / "diagnostics.json").read_text(encoding="utf-8-sig"))
+        except Exception as e:
+            diagnostics, error = None, str(e)
     try:
-        conversations = len(json.loads((BASE / "data" / "conversations.json").read_text(encoding="utf-8")))
+        conversations = json.loads((BASE / "data" / "conversations.json").read_text(encoding="utf-8-sig"))
+        conversations = len(conversations) if isinstance(conversations, list) else 0
     except Exception:
         conversations = 0
-    vault = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or "~/AIWikiVault").expanduser()
-    return {"diagnostics": diagnostics, "mock": mock, "conversations": conversations, "vault": str(vault)}
+    vault = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or Path.home() / "AIWikiVault").expanduser()
+    return {"diagnostics": diagnostics, "mock": mock, "error": error, "conversations": conversations, "vault": str(vault)}
 
 
 if __name__ == "__main__":
@@ -120,7 +115,15 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     url = f"http://127.0.0.1:{args.port}"
+    with socket.socket() as sock:
+        if sock.connect_ex(("127.0.0.1", args.port)) == 0:
+            print(f"ja existe um app rodando em {url}")
+            if not args.no_browser:
+                webbrowser.open(url)
+            raise SystemExit(0)
     print(f"Cognitive Wiki OS em {url}")
     if not args.no_browser:
-        threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+        timer = threading.Timer(1.0, webbrowser.open, args=(url,))
+        timer.daemon = True
+        timer.start()
     uvicorn.run(app, host="127.0.0.1", port=args.port)

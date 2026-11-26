@@ -124,7 +124,7 @@ def _fallback(conv, users):
     topics = [w for w, _ in Counter(w for w in words if w not in STOPWORDS).most_common(3)]
     return {"conversation_id": conv.get("id"), "category": category, "severity": severity,
             "evidence_quote": quote, "grounding_verified": is_grounded(quote, conv),
-            "topics": topics, "recommendation": TEMPLATES[category]}
+            "topics": topics, "recommendation": TEMPLATES[category], "backend": "mock"}
 
 
 _LOCAL = {}
@@ -197,7 +197,7 @@ def diagnose_conversation(conv, backend="mock"):
             "severity": parsed["severity"], "evidence_quote": str(parsed.get("evidence_quote") or ""),
             "grounding_verified": grounding,
             "topics": [str(t).lower() for t in parsed.get("topics") or []][:5],
-            "recommendation": str(parsed.get("recommendation") or TEMPLATES[parsed["category"]])}
+            "recommendation": str(parsed.get("recommendation") or TEMPLATES[parsed["category"]]), "backend": backend}
 
 
 def run_cognitive_diagnosis(backend=None):
@@ -217,7 +217,7 @@ def run_cognitive_diagnosis(backend=None):
     ids = [c.get("id") for c in conversations]
     diagnoses, new = [], 0
     for conv in conversations:
-        if conv.get("id") in old:
+        if old.get(conv.get("id"), {}).get("backend") == backend:  # cache so vale para o mesmo backend
             diagnoses.append(old[conv["id"]])
         else:
             diagnoses.append(diagnose_conversation(conv, backend))
@@ -225,8 +225,9 @@ def run_cognitive_diagnosis(backend=None):
     print(f"{new} novas, {len(ids) - new} do cache (backend {backend})")
 
     n = len(diagnoses) or 1
-    summary = {f"{cat}_pct": round(100.0 * sum(d["category"] == cat for d in diagnoses) / n, 1)
-               for cat in ("blind_delegation", "socratic_learning", "frustration_loop", "active_cocreation")}
+    summary = {f"{key}_pct": round(100.0 * sum(d["category"] == cat for d in diagnoses) / n, 1)
+               for key, cat in (("blind_delegation", "blind_delegation"), ("socratic", "socratic_learning"),
+                                ("frustration_loop", "frustration_loop"), ("active_cocreation", "active_cocreation"))}
     ratios = []
     for conv in conversations:
         u = sum(len(str(m.get("content") or "")) for m in conv.get("messages") or [] if m.get("role") == "user")

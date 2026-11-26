@@ -1,0 +1,93 @@
+{
+  "generated_at": "2026-11-25T12:00:00Z",
+  "cognitive_health_score": 58,
+  "summary_metrics": {
+    "blind_delegation_pct": 33.3,
+    "socratic_pct": 16.7,
+    "frustration_loop_pct": 16.7,
+    "active_cocreation_pct": 33.3,
+    "avg_prompt_effort_ratio": 0.42
+  },
+  "recommendations": [
+    "Em tarefas de codigo, escreva primeiro um esboco seu e peca revisao em vez de pedir a solucao pronta.",
+    "Quando um erro se repetir 2 vezes, pare e colete diagnostico (logs, memoria) antes de pedir outra tentativa.",
+    "Mantenha o habito de pedir intuicao e testar hipoteses: e onde voce mais aprende."
+  ],
+  "conversation_diagnoses": [
+    {
+      "conversation_id": "c1",
+      "category": "blind_delegation",
+      "severity": 4,
+      "evidence_quote": "nao precisa me explicar nada, so manda o codigo pronto",
+      "grounding_verified": true,
+      "topics": [
+        "autenticacao jwt",
+        "fastapi"
+      ],
+      "recommendation": "Antes de pedir o codigo, escreva voce o fluxo de login/refresh em 5 passos e peca para a IA revisar."
+    },
+    {
+      "conversation_id": "c2",
+      "category": "frustration_loop",
+      "severity": 4,
+      "evidence_quote": "continua o mesmo erro, so arruma ai",
+      "grounding_verified": true,
+      "topics": [
+        "cuda out of memory",
+        "pytorch"
+      ],
+      "recommendation": "Pare e investigue: rode torch.cuda.memory_summary() e mande o resultado em vez de repetir o erro."
+    },
+    {
+      "conversation_id": "c3",
+      "category": "socratic_learning",
+      "severity": 1,
+      "evidence_quote": "quero entender a intuicao antes de ver a formula",
+      "grounding_verified": true,
+      "topics": [
+        "attention",
+        "transformers",
+        "sliding window attention"
+      ],
+      "recommendation": "Otimo uso: continue pedindo intuicao e testando hipoteses proprias."
+    },
+    {
+      "conversation_id": "c4",
+      "category": "active_cocreation",
+      "severity": 1,
+      "evidence_quote": "ja escrevi o parser de wikilinks",
+      "grounding_verified": true,
+      "topics": [
+        "grafos de conhecimento",
+        "obsidian",
+        "pagerank"
+      ],
+      "recommendation": "Continue trazendo sua implementacao e pedindo revisao critica."
+    },
+    {
+      "conversation_id": "c5",
+      "category": "blind_delegation",
+      "severity": 3,
+      "evidence_quote": "resume esse artigo sobre RLHF pra mim que eu nao vou ler",
+      "grounding_verified": true,
+      "topics": [
+        "rlhf",
+        "dpo"
+      ],
+      "recommendation": "Leia o abstract e a conclusao antes; peca a IA para checar seu entendimento em vez de resumir por voce."
+    },
+    {
+      "conversation_id": "c6",
+      "category": "active_cocreation",
+      "severity": 1,
+      "evidence_quote": "eu li a doc do fastmcp",
+      "grounding_verified": true,
+      "topics": [
+        "mcp",
+        "fastmcp",
+        "obsidian"
+      ],
+      "recommendation": "Bom padrao: voce decide, a IA revisa."
+    }
+  ]
+}

@@ -426,6 +426,7 @@
   const actionDetail = (data) => {
     const result = data.result;
     if (Array.isArray(result)) return `ok — ${result.length} item(ns)`;
+    if (result && result.by_source) return `ok — ${result.total} conversas (` + Object.entries(result.by_source).map(([k, v]) => `${k}: ${v}`).join(", ") + ")";
     if (result && typeof result === "object" && result.sent === false) return result.reason || "preview salvo";
     return "ok";
   };

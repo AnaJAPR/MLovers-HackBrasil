@@ -49,7 +49,13 @@ def home():
 
 @app.post("/api/collect")
 def api_collect():
-    return call("collector", "collect")
+    out = call("collector", "collect")
+    if out["ok"]:  # nao manda as conversas inteiras para a UI, so a contagem
+        counts = {}
+        for conv in out["result"]:
+            counts[conv["source"]] = counts.get(conv["source"], 0) + 1
+        out["result"] = {"total": len(out["result"]), "by_source": counts}
+    return out
 
 
 @app.post("/api/web-extract/{platform}")

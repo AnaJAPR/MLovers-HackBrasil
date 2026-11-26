@@ -218,15 +218,33 @@ em 32), sem truncamento. Só PSR caiu de −0,33 para −0,46 e encurtou as resp
 diversidade que o paper descreve. Com 26 exemplos de teste, cada ponto equivale a ~4%: o resultado é
 direcional, e a escala (modelo de 4-7B, dataset de 1.500) fica para a GPU grande. Num modelo de 0.5B e com
 lr alto (2e-5), o termo negativo colapsa o modelo (recompensa positiva rara demais); use lr ≈ 1e-6 a 2e-6.
-Para usar o modelo no app, defina no `.env`:
+**Dois LLMs, ambos por API (o app não carrega modelo nenhum):**
+
+| Job | LLM |
+|---|---|
+| Classificar cada conversa (varredura em massa) | **modelo treinado**, servido via vLLM (`llm.ask_small`) |
+| Ingest do wiki (varredura) | LLM geral rápido, `LLM_MODEL_FAST` (Haiku) |
+| Recomendações, fronteira, notas verdes, agente web | LLM geral de decisão, `LLM_MODEL` (Sonnet) |
+
+O LLM geral usa o login do Claude Code via `claude-agent-sdk` (dá para trocar por API depois). Para
+servir o modelo treinado numa máquina com GPU (API compatível com OpenAI):
 
 ```bash
-DIAG_BACKEND=local
-LOCAL_MODEL=/caminho/para/o/adapter     # pasta com adapter_config.json
-LOCAL_BASE_MODEL=Qwen/Qwen3-4B          # modelo base do adapter
+pip install vllm   # numa venv separada, na máquina da GPU
+vllm serve Qwen/Qwen2.5-1.5B-Instruct --enable-lora --max-lora-rank 16 \
+     --lora-modules cognitive=/caminho/do/adapter --max-model-len 4096 \
+     --host 0.0.0.0 --port 8000 --api-key <chave-secreta>
 ```
-O `diagnostics.py` carrega o adapter com `peft` se `adapter_config.json` existir; se a resposta não
-passar no verificador, cai na heurística mock (nunca quebra).
+E, no `.env` da máquina do app:
+
+```bash
+DIAG_BACKEND=small
+SMALL_MODEL_URL=http://IP-DA-GPU:8000
+SMALL_MODEL_NAME=cognitive
+SMALL_MODEL_API_KEY=<chave-secreta>
+```
+Se o servidor estiver fora do ar ou a resposta não passar no verificador, aquela conversa cai na
+heurística mock (nunca quebra).
 
 ## 9. Privacidade
 - **Fica local:** conversas brutas, `data/*.json`, vault Obsidian, estado do sync e o histórico lido de `~/.claude`/`~/.codex` — nada vai para um servidor nosso.

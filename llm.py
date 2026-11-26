@@ -1,11 +1,22 @@
-"""Unica porta de saida para LLM. Usa o claude-agent-sdk, que reaproveita o login do Claude Code
-(nao precisa de ANTHROPIC_API_KEY). Usado por diagnostics, obsidian, research e train_wreinforce."""
+"""Unica porta de saida para os dois LLMs do app:
+- ask_json: LLM "geral" (Claude via claude-agent-sdk, usa o login do Claude Code; sem API key).
+- ask_small: LLM "pequeno" treinado (W-REINFORCE) servido via vLLM, API compativel com OpenAI.
+Usado por diagnostics, obsidian, research e train_wreinforce."""
 import json
 import os
 import re
+import ssl
+import urllib.error
+import urllib.request
 
 import anyio
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
+
+try:
+    import certifi  # macOS sem os certificados do sistema
+    SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+    SSL_CONTEXT = ssl.create_default_context()
 
 
 def ask_json(prompt: str, model: str | None = None):
@@ -28,6 +39,27 @@ def ask_json(prompt: str, model: str | None = None):
     text = anyio.run(run)
     match = re.search(r"(\{.*\}|\[.*\])", text, re.S)
     return json.loads(match.group(1) if match else text)
+
+
+def ask_small(prompt: str) -> str:
+    """Manda o prompt ao modelo treinado (vLLM/OpenAI-compatible) e devolve o texto cru da resposta."""
+    url = os.getenv("SMALL_MODEL_URL", "").strip().rstrip("/")
+    if not url:
+        raise RuntimeError("SMALL_MODEL_URL vazio: aponte para o servidor vLLM do modelo treinado")
+    body = json.dumps({"model": os.getenv("SMALL_MODEL_NAME", "cognitive"),
+                       "messages": [{"role": "user", "content": prompt}],
+                       "temperature": 0, "max_tokens": 384}).encode("utf-8")
+    req = urllib.request.Request(url + "/v1/chat/completions", data=body, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    key = os.getenv("SMALL_MODEL_API_KEY", "").strip()
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    try:
+        with urllib.request.urlopen(req, timeout=120, context=SSL_CONTEXT) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"modelo pequeno HTTP {exc.code}: {exc.read().decode('utf-8', 'replace')[:300]}")
+    return data["choices"][0]["message"]["content"]
 
 
 if __name__ == "__main__":

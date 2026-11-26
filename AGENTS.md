@@ -31,9 +31,9 @@ OBSOLETAS — onde conflitarem, vale este AGENTS.md.
 ## Mapa de arquivos
 | arquivo | o que faz |
 |---|---|
-| `llm.py` | `ask_json(prompt) -> dict/list` via claude-agent-sdk (usa o login do Claude Code; sem API key). Unica porta para o Claude. |
+| `llm.py` | `ask_json(prompt) -> dict/list` via claude-agent-sdk (login do Claude Code, sem API key) e `ask_small(prompt) -> str` no modelo treinado via API OpenAI/vLLM. Unica porta para os dois LLMs. |
 | `collector.py` | Le Claude Code (`~/.claude/projects/**/*.jsonl`) e Codex (`~/.codex/sessions/**/*.jsonl`), importa exports .zip/.json de `data/imports/`, e roda a extracao web (Agent SDK + Chrome DevTools MCP, instrucoes em `skills/*.md`, pausa para login humano). -> `data/conversations.json` |
-| `diagnostics.py` | Prompt do classificador + verificador de 3 camadas + metricas sem LLM + inferencia por conversa (`DIAG_BACKEND=mock\|claude\|local`, cache por id) + relatorio geral (score + recomendacoes). -> `data/diagnostics.json` |
+| `diagnostics.py` | Prompt do classificador + verificador de 3 camadas + metricas sem LLM + inferencia por conversa (`DIAG_BACKEND=mock\|claude\|small`, cache por id; small usa `llm.ask_small`) + relatorio geral (score + recomendacoes). -> `data/diagnostics.json` |
 | `train_wreinforce.py` | Dataset sintetico, SFT baseline, treino W-REINFORCE, avaliacao. Importa `build_prompt`/`verify` de `diagnostics.py`. |
 | `obsidian.py` | O wiki. Le o vault do disco (notas + `[[links]]`), faz o ingest das conversas em notas de conceito (azuis), marca alertas (vermelho), escreve `.obsidian/graph.json`, respeita edicoes/delecoes do usuario. Expoe `read_vault()` e `write_note()` para os outros modulos. |
 | `research.py` | Notas verdes: escolhe os conceitos centrais do grafo, pede ao LLM 2-3 topicos vizinhos que faltam, pesquisa no Firecrawl, escreve nota verde so com base nas fontes (com URLs) via `obsidian.write_note`. -> tambem `data/frontier_research.json` |

@@ -128,44 +128,6 @@ def _fallback(conv, users):
             "topics": topics, "recommendation": TEMPLATES[category], "backend": "mock"}
 
 
-_LOCAL = {}
-
-
-def _local_generate(conv):
-    """Modelo local (LoRA ou HF completo), carregado uma vez. Dependencias opcionais."""
-    if not _LOCAL:
-        model_id = os.getenv("LOCAL_MODEL", "").strip()
-        if not model_id:
-            raise RuntimeError("LOCAL_MODEL vazio: defina o adapter LoRA ou um modelo HF")
-        try:
-            import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError as exc:
-            raise RuntimeError(f"backend local precisa de torch/transformers instalados: {exc}")
-        adapter = (Path(model_id) / "adapter_config.json").exists()
-        base_id = os.getenv("LOCAL_BASE_MODEL", "Qwen/Qwen2.5-0.5B-Instruct")
-        tokenizer = AutoTokenizer.from_pretrained(base_id if adapter else model_id)
-        model = AutoModelForCausalLM.from_pretrained(base_id if adapter else model_id)
-        if adapter:
-            try:
-                from peft import PeftModel
-            except ImportError as exc:
-                raise RuntimeError(f"adapter LoRA exige peft instalado: {exc}")
-            model = PeftModel.from_pretrained(model, model_id)
-        device = ("cuda" if torch.cuda.is_available()
-                  else "mps" if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()
-                  else "cpu")
-        model.to(device).eval()
-        _LOCAL.update(model=model, tokenizer=tokenizer, torch=torch, device=device)
-    tok, torch, device = _LOCAL["tokenizer"], _LOCAL["torch"], _LOCAL["device"]
-    text = tok.apply_chat_template([{"role": "user", "content": build_prompt(conv)}],
-                                   add_generation_prompt=True, tokenize=False)
-    inputs = tok(text, return_tensors="pt").to(device)
-    with torch.no_grad():
-        out = _LOCAL["model"].generate(**inputs, max_new_tokens=384, do_sample=False)
-    return tok.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-
-
 def diagnose_conversation(conv, backend="mock"):
     """Classifica uma conversa. Fallback deterministico em qualquer falha do LLM."""
     conv = conv or {}
@@ -182,16 +144,16 @@ def diagnose_conversation(conv, backend="mock"):
             grounding = is_grounded(parsed.get("evidence_quote"), conv)
         else:
             parsed = None
-    elif backend == "local":
+    elif backend == "small":
         try:
-            checked = verify(_local_generate(conv), conv)
-            parsed, grounding = checked["parsed"], checked["grounding_ok"]
-            if not checked["format_ok"]:
-                parsed = None
+            import llm
+            checked = verify(llm.ask_small(build_prompt(conv)), conv)
+            if checked["format_ok"]:
+                parsed, grounding = checked["parsed"], checked["grounding_ok"]
+            else:
+                print(f"small sem formato valido em {conv.get('id')}")
         except Exception as exc:
-            print(f"local falhou em {conv.get('id')}: {exc}")
-        if not parsed:
-            print(f"local sem formato valido em {conv.get('id')}")
+            print(f"small falhou em {conv.get('id')}: {exc}")
     if not parsed:
         return _fallback(conv, users)
     return {"conversation_id": conv.get("id"), "category": parsed["category"],
@@ -204,7 +166,7 @@ def diagnose_conversation(conv, backend="mock"):
 def run_cognitive_diagnosis(backend=None):
     """Diagnostica todas as conversas (com cache por id) e grava data/diagnostics.json."""
     backend = backend or os.getenv("DIAG_BACKEND", "mock")
-    if backend not in ("mock", "claude", "local"):
+    if backend not in ("mock", "claude", "small"):
         backend = "mock"
     src = DATA / "conversations.json"
     conversations = json.loads((src if src.exists() else ROOT / "mock" / "conversations.json").read_text(encoding="utf-8"))
@@ -217,7 +179,7 @@ def run_cognitive_diagnosis(backend=None):
             old = {}
     # cache so vale para o mesmo backend
     pending = [c for c in conversations if old.get(c.get("id"), {}).get("backend") != backend]
-    if backend == "claude" and len(pending) > 1:  # so a chamada HTTP paraleliza; local (GPU) e mock seguem sequenciais
+    if backend in ("claude", "small") and len(pending) > 1:  # chamadas HTTP paralelizam; mock segue sequencial
         with ThreadPoolExecutor(max_workers=6) as ex:
             fresh = list(ex.map(lambda c: diagnose_conversation(c, backend), pending))
     else:
@@ -274,7 +236,7 @@ def run_cognitive_diagnosis(backend=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Diagnostico de saude cognitiva no uso de IA")
-    parser.add_argument("--backend", choices=("mock", "claude", "local"), default=None)
+    parser.add_argument("--backend", choices=("mock", "claude", "small"), default=None)
     args = parser.parse_args()
     report = run_cognitive_diagnosis(args.backend)
     print(f"\nScore de saude cognitiva: {report['cognitive_health_score']}/100")

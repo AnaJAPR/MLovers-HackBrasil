@@ -225,9 +225,9 @@ def run_cognitive_diagnosis(backend=None):
     print(f"{new} novas, {len(ids) - new} do cache (backend {backend})")
 
     n = len(diagnoses) or 1
-    summary = {f"{key}_pct": round(100.0 * sum(d["category"] == cat for d in diagnoses) / n, 1)
-               for key, cat in (("blind_delegation", "blind_delegation"), ("socratic", "socratic_learning"),
-                                ("frustration_loop", "frustration_loop"), ("active_cocreation", "active_cocreation"))}
+    pct = {cat: round(100.0 * sum(d["category"] == cat for d in diagnoses) / n, 1) for cat in CATEGORIES}
+    summary = {"blind_delegation_pct": pct["blind_delegation"], "socratic_pct": pct["socratic_learning"],
+               "frustration_loop_pct": pct["frustration_loop"], "active_cocreation_pct": pct["active_cocreation"]}
     ratios = []
     for conv in conversations:
         u = sum(len(str(m.get("content") or "")) for m in conv.get("messages") or [] if m.get("role") == "user")
@@ -244,8 +244,8 @@ def run_cognitive_diagnosis(backend=None):
         return 100
 
     score = int(sum(health(d) for d in diagnoses) / len(diagnoses)) if diagnoses else 0
-    healthy = max(("socratic_learning", "active_cocreation"), key=lambda c: summary[f"{c}_pct"])
-    problems = sorted(("blind_delegation", "frustration_loop"), key=lambda c: -summary[f"{c}_pct"])[:2]
+    healthy = max(("socratic_learning", "active_cocreation"), key=lambda c: pct[c])
+    problems = sorted(("blind_delegation", "frustration_loop"), key=lambda c: -pct[c])[:2]
     recommendations = [TEMPLATES[c] for c in problems] + [TEMPLATES[healthy]]
     if backend != "mock" and diagnoses:
         worst = sorted(diagnoses, key=lambda d: -d["severity"])[:5]

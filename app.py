@@ -111,8 +111,18 @@ def api_status():
         conversations = len(conversations) if isinstance(conversations, list) else 0
     except Exception:
         conversations = 0
+    frontier_path = BASE / "data" / "frontier_research.json"
+    frontier_mock = not frontier_path.exists()
+    if frontier_mock:
+        frontier_path = BASE / "mock" / "frontier_research.json"
+    try:
+        frontier = json.loads(frontier_path.read_text(encoding="utf-8-sig"))
+        frontier = frontier if isinstance(frontier, list) else []
+    except Exception:
+        frontier = []
     vault = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or Path.home() / "AIWikiVault").expanduser()
-    return {"diagnostics": diagnostics, "mock": mock, "error": error, "conversations": conversations, "vault": str(vault)}
+    return {"diagnostics": diagnostics, "mock": mock, "error": error, "conversations": conversations,
+            "vault": str(vault), "frontier": frontier, "frontier_mock": frontier_mock}
 
 
 if __name__ == "__main__":

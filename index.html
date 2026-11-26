@@ -188,6 +188,20 @@
   .rec strong { color: var(--text); font-weight: 600; }
   .empty { color: var(--muted); font-size: 13px; margin: 0; padding: 6px 0; }
 
+  /* fronteira */
+  .frontier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .frontier { border: 1px solid color-mix(in srgb, var(--good) 28%, var(--line)); border-radius: 13px; background: color-mix(in srgb, var(--good) 5%, var(--panel-2)); padding: 14px 15px; min-width: 0; }
+  .frontier h3 { font-size: 14px; margin-bottom: 6px; }
+  .frontier p { margin: 0 0 9px; font-size: 13px; color: var(--muted); }
+  .frontier ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
+  .frontier li { margin-bottom: 3px; }
+  .frontier a { color: var(--good); overflow-wrap: anywhere; }
+  .frontier .nofont { font-size: 12px; color: var(--warn); margin: 0; }
+
+  /* pro */
+  #pro-note { background: color-mix(in srgb, var(--accent) 9%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 12px; padding: 11px 14px; font-size: 13.5px; margin: 0; }
+  .pill.pro { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
   footer { color: var(--muted); font-size: 12px; padding: 4px 2px 0; display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
   #vault-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
 
@@ -218,6 +232,8 @@
       </div>
     </div>
     <div class="topstats">
+      <span class="pill pro" id="pro-pill" hidden>Pro</span>
+      <span class="pill" id="backend-pill" hidden></span>
       <span class="pill" id="conv-count">— conversas</span>
       <span class="pill mock" id="mock-pill" hidden>dados de exemplo (mock)</span>
     </div>
@@ -225,6 +241,8 @@
 </header>
 
 <main class="wrap">
+  <p id="pro-note" hidden></p>
+
   <section class="card actions" aria-label="Ações">
     <div class="action">
       <button class="btn" data-post="/api/collect">1 · Coletar conversas locais</button>
@@ -300,6 +318,15 @@
     <div class="diag-grid" id="diagnoses"><p class="empty">Carregando…</p></div>
   </section>
 
+  <section class="card" id="frontier-card">
+    <div class="section-head">
+      <h2>Novos nós verdes (fronteira)</h2>
+      <span class="muted">pesquisa web real via Firecrawl · notas verdes no Obsidian</span>
+    </div>
+    <p class="empty" id="frontier-mock" hidden></p>
+    <div class="frontier-grid" id="frontier"><p class="empty">Carregando…</p></div>
+  </section>
+
   <footer>
     <span>Vault: <span id="vault-path">—</span></span>
     <span>100% local · <span id="host">127.0.0.1</span> · grafo exposto via MCP</span>
@@ -308,7 +335,12 @@
 
 <script>
   const $ = (sel) => document.querySelector(sel);
-  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  };
   const CATEGORIES = {
     blind_delegation: ["Delegação cega", "blind"],
     frustration_loop: ["Loop de frustração", "loop"],
@@ -328,15 +360,60 @@
     el.textContent = text;
   }
 
+  const BACKENDS = { claude: "Claude", local: "modelo local W-REINFORCE", mock: "heurística" };
+
+  function renderFrontier() {
+    const box = $("#frontier");
+    const items = (status && Array.isArray(status.frontier) ? status.frontier : []);
+    box.replaceChildren();
+    const mockNote = $("#frontier-mock");
+    mockNote.hidden = !(status && status.frontier_mock);
+    mockNote.textContent = "exemplos (mock) — rode “5 · Pesquisar fronteira” para gerar com fontes reais";
+    if (!items.length) {
+      box.append(el("p", "empty", "Nenhum nó de fronteira ainda."));
+      return;
+    }
+    items.forEach((item) => {
+      const card = el("article", "frontier");
+      card.append(el("h3", null, item.topic || "sem título"));
+      if (item.why) card.append(el("p", null, item.why));
+      const sources = (Array.isArray(item.sources) ? item.sources : [])
+        .filter((s) => s && /^https?:\/\//i.test(String(s.url || "")));
+      if (sources.length) {
+        const ul = el("ul");
+        sources.forEach((s) => {
+          const li = el("li");
+          const a = el("a", null, s.title || s.url);
+          a.href = s.url;
+          a.target = "_blank";
+          a.rel = "noopener";
+          li.append(a);
+          ul.append(li);
+        });
+        card.append(ul);
+      } else {
+        card.append(el("p", "nofont", "sem fonte (configure FIRECRAWL_API_KEY)"));
+      }
+      box.append(card);
+    });
+  }
+
   function render() {
     const d = status && status.diagnostics;
     const conv = (status && status.conversations) || 0;
+    const list = d && Array.isArray(d.conversation_diagnoses) ? d.conversation_diagnoses : [];
     $("#conv-count").textContent = `${conv} ${conv === 1 ? "conversa" : "conversas"}`;
     $("#mock-pill").hidden = !(status && status.mock);
+    const used = [...new Set(list.map((x) => x.backend).filter(Boolean))];
+    $("#backend-pill").hidden = !used.length;
+    $("#backend-pill").textContent = used.length
+      ? "diagnóstico: " + used.map((b) => BACKENDS[b] || b).join(" + ")
+      : "";
     const vault = (status && status.vault) || "";
     $("#vault-path").textContent = vault || "—";
     $("#vault-path").title = vault;
     $("#open-obsidian").href = vault ? "obsidian://open?path=" + encodeURIComponent(vault) : "obsidian://open";
+    renderFrontier();
 
     if (!d) {
       $("#score-value").textContent = "—";
@@ -344,9 +421,9 @@
       $("#generated").textContent = status.error
         ? "erro ao ler o diagnóstico: " + status.error
         : "Rode “3 · Diagnosticar” para gerar o relatório.";
-      $("#metrics").innerHTML = "";
-      $("#recs").innerHTML = '<li class="empty">Nenhuma recomendação ainda.</li>';
-      $("#diagnoses").innerHTML = '<p class="empty">Nenhum diagnóstico por conversa ainda.</p>';
+      $("#metrics").replaceChildren();
+      $("#recs").replaceChildren(el("li", "empty", "Nenhuma recomendação ainda."));
+      $("#diagnoses").replaceChildren(el("p", "empty", "Nenhum diagnóstico por conversa ainda."));
       $("#diag-count").textContent = "";
       return;
     }
@@ -365,49 +442,63 @@
     $("#generated").textContent = `Gerado em ${stamp}` + (status.mock ? " · dados de exemplo" : "");
 
     const m = d.summary_metrics || {};
-    let metricsHtml = METRICS.map(([key, label, tone]) => {
+    const metrics = $("#metrics");
+    metrics.replaceChildren();
+    const addMetric = (label, value, tone) => {
+      const row = el("div", "metric");
+      const head = el("div", "metric-head");
+      head.append(el("span", null, label), el("b", null, value));
+      const bar = el("div", "bar");
+      const fill = el("i", tone);
+      fill.style.width = Math.min(100, Math.max(0, parseFloat(value) || 0)) + "%";
+      bar.append(fill);
+      row.append(head, bar);
+      metrics.append(row);
+    };
+    METRICS.forEach(([key, label, tone]) => {
       const value = Math.max(0, Math.min(100, Number(m[key]) || 0));
-      return `<div class="metric">
-        <div class="metric-head"><span>${label}</span><b>${value.toFixed(1)}%</b></div>
-        <div class="bar"><i class="${tone}" style="width:${value}%"></i></div>
-      </div>`;
-    }).join("");
-    const effort = Math.max(0, Number(m.avg_prompt_effort_ratio) || 0);
-    metricsHtml += `<div class="metric">
-      <div class="metric-head"><span>Esforço médio do prompt</span><b>${effort.toFixed(2)}</b></div>
-      <div class="bar"><i class="accent" style="width:${Math.min(100, effort * 100)}%"></i></div>
-    </div>`;
-    $("#metrics").innerHTML = metricsHtml;
+      addMetric(label, value.toFixed(1) + "%", tone);
+    });
+    addMetric("Esforço médio do prompt", (Math.max(0, Number(m.avg_prompt_effort_ratio) || 0)).toFixed(2), "accent");
 
     const recs = Array.isArray(d.recommendations) ? d.recommendations : [];
-    $("#recs").innerHTML = recs.length
-      ? recs.map((r) => `<li>${esc(r)}</li>`).join("")
-      : '<li class="empty">Nenhuma recomendação.</li>';
+    $("#recs").replaceChildren(...(recs.length
+      ? recs.map((r) => el("li", null, r))
+      : [el("li", "empty", "Nenhuma recomendação.")]));
 
-    const list = Array.isArray(d.conversation_diagnoses) ? d.conversation_diagnoses : [];
     $("#diag-count").textContent = list.length ? `(${list.length})` : "";
-    $("#diagnoses").innerHTML = list.length
-      ? list.map((x) => {
-          const [label, tone] = CATEGORIES[x.category] || [x.category || "outro", "other"];
-          const sev = Math.max(1, Math.min(5, Number(x.severity) || 1));
-          const sevTone = sev >= 4 ? "bad" : sev >= 3 ? "warn" : "good";
-          const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < sev ? "on" : ""}"></i>`).join("");
-          const topics = (Array.isArray(x.topics) ? x.topics : []).map((t) => `<span>#${esc(t)}</span>`).join("");
-          return `<article class="diag">
-            <div class="diag-head">
-              <span class="chip ${tone}">${esc(label)}</span>
-              <span class="sev ${sevTone}" title="Severidade ${sev} de 5" aria-label="Severidade ${sev} de 5">${dots}</span>
-              <span class="conv">${esc(x.conversation_id)}</span>
-            </div>
-            <blockquote>
-              <p>“${esc(x.evidence_quote)}”</p>
-              ${x.grounding_verified ? '<span class="verified">✓ verificado</span>' : ""}
-            </blockquote>
-            ${topics ? `<div class="tags">${topics}</div>` : ""}
-            ${x.recommendation ? `<p class="rec"><strong>Recomendação:</strong> ${esc(x.recommendation)}</p>` : ""}
-          </article>`;
-        }).join("")
-      : '<p class="empty">Nenhum diagnóstico por conversa.</p>';
+    const cards = list.map((x) => {
+      const [label, tone] = CATEGORIES[x.category] || [x.category || "outro", "other"];
+      const sev = Math.max(1, Math.min(5, Number(x.severity) || 1));
+      const sevTone = sev >= 4 ? "bad" : sev >= 3 ? "warn" : "good";
+      const card = el("article", "diag");
+      const head = el("div", "diag-head");
+      const sevBox = el("span", "sev " + sevTone);
+      sevBox.title = `Severidade ${sev} de 5`;
+      sevBox.setAttribute("aria-label", `Severidade ${sev} de 5`);
+      for (let i = 0; i < 5; i++) sevBox.append(el("i", i < sev ? "on" : ""));
+      head.append(el("span", "chip " + tone, label), sevBox, el("span", "conv", x.conversation_id));
+      card.append(head);
+      const quote = el("blockquote");
+      quote.append(el("p", null, `“${x.evidence_quote ?? ""}”`));
+      if (x.grounding_verified) quote.append(el("span", "verified", "✓ verificado"));
+      card.append(quote);
+      const topics = Array.isArray(x.topics) ? x.topics : [];
+      if (topics.length) {
+        const tags = el("div", "tags");
+        topics.forEach((t) => tags.append(el("span", null, "#" + t)));
+        card.append(tags);
+      }
+      if (x.recommendation) {
+        const rec = el("p", "rec");
+        rec.append(el("strong", null, "Recomendação:"), document.createTextNode(" " + x.recommendation));
+        card.append(rec);
+      }
+      return card;
+    });
+    $("#diagnoses").replaceChildren(...(cards.length
+      ? cards
+      : [el("p", "empty", "Nenhum diagnóstico por conversa.")]));
   }
 
   async function loadStatus() {
@@ -425,6 +516,11 @@
     data.error || (data.result && (data.result.error || data.result.reason)) || "erro sem mensagem";
   const actionDetail = (data) => {
     const result = data.result;
+    if (result && result.skipped) {
+      const when = result.last ? new Date(result.last) : null;
+      const stamp = when && !isNaN(when) ? when.toLocaleString("pt-BR") : (result.last || "—");
+      return `já extraído em ${stamp} (pulado, menos de 15 dias)`;
+    }
     if (Array.isArray(result)) return `ok — ${result.length} item(ns)`;
     if (result && result.by_source) return `ok — ${result.total} conversas (` + Object.entries(result.by_source).map(([k, v]) => `${k}: ${v}`).join(", ") + ")";
     if (result && typeof result === "object" && result.sent === false) return result.reason || "preview salvo";
@@ -435,7 +531,10 @@
     btn.addEventListener("click", async () => {
       const state = btn.closest(".action").querySelector(".state");
       let url = btn.dataset.post;
-      if (btn.dataset.platform) url += $("#platform").value;
+      if (btn.dataset.platform) {
+        url += $("#platform").value;
+        if (!confirm("Uma janela do Chrome vai abrir. Se aparecer login, faça login nela — o app espera até 5 minutos.")) return;
+      }
       btn.disabled = true;
       setState(state, "run", "rodando…");
       try {
@@ -443,7 +542,7 @@
         const data = await res.json();
         if (data.ok === false || data.result?.ok === false) throw new Error(actionError(data));
         setState(state, "ok", actionDetail(data));
-        if (["/api/collect", "/api/web-extract/", "/api/diagnose", "/api/wiki"].includes(btn.dataset.post)) await loadStatus();
+        if (["/api/collect", "/api/web-extract/", "/api/diagnose", "/api/wiki", "/api/frontier"].includes(btn.dataset.post)) await loadStatus();
       } catch (e) {
         setState(state, "err", "erro: " + e.message);
       } finally {
@@ -474,6 +573,16 @@
       btn.disabled = false;
     }
   });
+
+  const pro = new URLSearchParams(location.search).get("pro");
+  if (pro) {
+    $("#pro-pill").hidden = false;
+    const note = $("#pro-note");
+    note.hidden = false;
+    note.textContent = pro === "demo"
+      ? "Checkout em modo demo: ABACATEPAY_API_KEY não configurada, nenhuma cobrança foi feita."
+      : "Obrigado por assinar o Pro! Plano Pro ativado nesta instalação local.";
+  }
 
   $("#host").textContent = location.host;
   loadStatus();

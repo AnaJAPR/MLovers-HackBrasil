@@ -4,6 +4,7 @@ __pycache__/
 .env
 data/*
 !data/.gitkeep
-outputs/
+outputs*/
+outputs*.txt
 checkpoints/
 *.gguf

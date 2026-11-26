@@ -3,16 +3,11 @@ r"""Servidor MCP do "LLM Wiki" (vault Obsidian) + diagnostico cognitivo do usuar
 Claude Code (caminhos ABSOLUTOS):
   macOS/Linux: claude mcp add cognitive-wiki -- "/Users/voce/.venv/bin/python" "/Users/voce/projeto/mcp_server.py"
   Windows:     claude mcp add cognitive-wiki -- "C:\Users\voce\.venv\Scripts\python.exe" "C:\Users\voce\projeto\mcp_server.py"
-
 Claude Desktop (macOS: ~/Library/Application Support/Claude/claude_desktop_config.json;
-Windows: %APPDATA%\Claude\claude_desktop_config.json):
-  {"mcpServers": {"cognitive-wiki": {"command": "/Users/voce/.venv/bin/python",
-   "args": ["/Users/voce/projeto/mcp_server.py"]}}}
-  No Windows: "command": "C:\Users\voce\.venv\Scripts\python.exe",
-              "args": ["C:\Users\voce\projeto\mcp_server.py"].
-
-Rodar: python mcp_server.py         -> stdio (Claude Code / Claude Desktop)
-       python mcp_server.py --http  -> http://127.0.0.1:8000/mcp
+Windows: %APPDATA%\Claude\claude_desktop_config.json). Exemplo macOS:
+  {"mcpServers": {"cognitive-wiki": {"command": "/Users/voce/.venv/bin/python", "args": ["/Users/voce/projeto/mcp_server.py"]}}}
+No Windows: {"command": "C:\Users\voce\.venv\Scripts\python.exe", "args": ["C:\Users\voce\projeto\mcp_server.py"]}
+Rodar: python mcp_server.py (stdio) | python mcp_server.py --http (http://127.0.0.1:8000/mcp)
 """
 import difflib
 import json
@@ -103,19 +98,13 @@ def get_graph_neighbors(title: str) -> str:
     name, node = _find(vault, title)
     if not node:
         return _missing(vault, title)
-
     def describe(item_title: str) -> str:
         real, item = _find(vault, item_title)
         return f"- {real} ({_source(item)[0]}, {_source(item)[1]})" if item else f"- {item_title} (nota ainda nao criada)"
-
-    out = node["links"]
-    back = [other for other, item in vault.items() if any(_norm(link) == _norm(name) for link in item["links"])]
-    direct = {_norm(name)} | {_norm(_find(vault, t)[0] or t) for t in out + back}
-    second = set()
-    for neighbor in {_find(vault, t)[0] for t in out + back} - {None}:
-        targets = [_find(vault, link)[0] for link in vault[neighbor]["links"]]
-        targets += [other for other, item in vault.items() if any(_norm(link) == _norm(neighbor) for link in item["links"])]
-        second |= {target for target in targets if target and _norm(target) not in direct}
+    resolved = {t: {_find(vault, l)[0] for l in n["links"]} - {None} for t, n in vault.items()}
+    out, back = node["links"], [o for o, ls in resolved.items() if name in ls]
+    near = resolved[name] | set(back)
+    second = set().union(*(resolved[t] | {o for o, ls in resolved.items() if t in ls} for t in near)) - near - {name}
     return (f"# {name} ({_source(node)[0]}, {_source(node)[1]})\n\n## Links de saida\n" + ("\n".join(map(describe, out)) or "(nenhum)")
             + "\n\n## Backlinks\n" + ("\n".join(map(describe, back)) or "(nenhum)")
             + "\n\n## Vizinhos de 2 saltos\n" + ("\n".join(map(describe, sorted(second))) or "(nenhum)"))

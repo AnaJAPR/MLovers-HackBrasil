@@ -365,7 +365,7 @@ def backup_vault_to_git() -> dict:
     def run(*args) -> subprocess.CompletedProcess:
         return subprocess.run([git, "-C", str(VAULT), *args], capture_output=True, text=True, encoding="utf-8")
 
-    if run("rev-parse", "--is-inside-work-tree").returncode != 0:
+    if not (VAULT / ".git").exists():  # nao usar rev-parse: o vault pode estar dentro de outro repo
         run("init")
         (VAULT / ".gitignore").write_text(".obsidian/workspace*\n.wiki_state.json.tmp\n", encoding="utf-8")
     remote = (os.getenv("VAULT_GIT_REMOTE") or "").strip()
@@ -373,10 +373,11 @@ def backup_vault_to_git() -> dict:
         run("remote", "add", "origin", remote)
 
     run("add", "-A")
-    commit = run("commit", "-m", f"wiki: atualizacao {datetime.now().isoformat(timespec='seconds')}")
-    committed = commit.returncode == 0
-    if not committed and "nothing to commit" not in (commit.stdout + commit.stderr).lower():
-        return {"ok": False, "error": commit.stderr}
+    committed = bool(run("status", "--porcelain").stdout.strip())  # independe do idioma do git
+    if committed:
+        commit = run("commit", "-m", f"wiki: atualizacao {datetime.now().isoformat(timespec='seconds')}")
+        if commit.returncode != 0:
+            return {"ok": False, "error": commit.stderr}
 
     pushed = False
     if run("remote", "get-url", "origin").returncode == 0:

@@ -69,7 +69,8 @@ Responda APENAS com JSON: {{"topics": [{{"topic": "...", "why": "...", "search_q
         print(f"[research] LLM indisponivel, nenhum topico proposto: {error}", file=sys.stderr)
         answer = {}
     proposals = answer.get("topics") if isinstance(answer, dict) else answer
-    seen = set(canonical)
+    # notas que o usuario deletou no Obsidian nunca voltam (e nao gastam Firecrawl)
+    seen = set(canonical) | {t.lower() for t in obsidian._load_state()["ignored"]}
     topics = []
     for item in proposals or []:
         if len(topics) >= n or not isinstance(item, dict):

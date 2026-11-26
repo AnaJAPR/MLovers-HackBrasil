@@ -1,0 +1,4 @@
+[
+  {"topic": "Gradient Checkpointing", "why": "Voce enfrentou CUDA out of memory varias vezes; entender o trade-off memoria x computacao evita o loop de tentativa e erro.", "note_title": "Gradient Checkpointing", "sources": [{"title": "PyTorch docs - torch.utils.checkpoint", "url": "https://pytorch.org/docs/stable/checkpoint.html"}]},
+  {"topic": "Refresh Token Rotation", "why": "Voce gerou um backend JWT sem revisar; rotacao de refresh tokens e o ponto de seguranca mais critico desse fluxo.", "note_title": "Refresh Token Rotation", "sources": [{"title": "OWASP JWT Cheat Sheet", "url": "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html"}]}
+]

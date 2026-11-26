@@ -75,5 +75,5 @@ OBSOLETAS — onde conflitarem, vale este AGENTS.md.
 - `diagnostics.run_cognitive_diagnosis(backend: str | None = None) -> dict` (grava `data/diagnostics.json`)
 - `obsidian.VAULT` (Path), `obsidian.read_vault() -> dict`, `obsidian.write_note(title, body, frontmatter) -> str`
 - `obsidian.sync_conversations_to_obsidian() -> dict`
-- `research.expand_frontier(n=3) -> list` (grava `data/frontier_research.json`)
+- `research.expand_frontier(n=3) -> list` (grava `data/frontier_research.json`: lista de `{"topic", "why", "note_title", "sources": [{"title", "url"}]}`)
 - `integrations.send_report(to: str | None = None) -> dict`, `integrations.create_checkout() -> str` (URL)

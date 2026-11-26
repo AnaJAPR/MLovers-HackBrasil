@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M16 6l8 10-8 10-8-10z' fill='white'/%3E%3C/svg%3E">
+<title>Cognitive Wiki OS</title>
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --panel: #ffffff;
+    --panel-2: #fafbfc;
+    --text: #14181f;
+    --muted: #66707f;
+    --line: #e3e7ed;
+    --track: #e9edf2;
+    --accent: #4f46e5;
+    --accent-2: #7c3aed;
+    --good: #15803d;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --info: #0369a1;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #111721;
+      --text: #e6ebf2;
+      --muted: #93a0b1;
+      --line: #242c37;
+      --track: #222a35;
+      --accent: #818cf8;
+      --accent-2: #a78bfa;
+      --good: #4ade80;
+      --warn: #fbbf24;
+      --bad: #f87171;
+      --info: #38bdf8;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .25);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { width: min(1120px, 100% - 32px); margin: 0 auto; }
+  .muted { color: var(--muted); }
+  h1, h2, h3 { margin: 0; line-height: 1.25; letter-spacing: -.01em; }
+  h2 { font-size: 17px; font-weight: 650; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+  /* topo */
+  header.topbar {
+    position: relative;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(900px 240px at 15% -60%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
+      var(--panel);
+  }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px 0 20px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .mark {
+    width: 46px; height: 46px; flex: none; border-radius: 14px;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff; font-size: 22px; box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .brand h1 { font-size: 22px; font-weight: 750; }
+  .brand p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+  .topstats { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); white-space: nowrap;
+  }
+  .pill.mock { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+
+  main.wrap { padding: 22px 0 40px; display: flex; flex-direction: column; gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 20px;
+  }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .section-head .muted { font-size: 12px; }
+
+  /* acoes */
+  .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); gap: 12px 16px; }
+  .action { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .row { display: flex; gap: 8px; min-width: 0; }
+  .btn {
+    appearance: none; width: 100%; min-height: 40px; padding: 9px 13px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--text);
+    font: inherit; font-size: 13.5px; font-weight: 600; text-align: center; text-decoration: none;
+    cursor: pointer; transition: border-color .15s, background .15s, transform .05s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, var(--panel-2)); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .btn.primary { background: linear-gradient(135deg, #4f46e5, #7c3aed); border-color: transparent; color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+  .btn.pro { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--accent); }
+  .row .btn { padding-left: 8px; padding-right: 8px; font-size: 13px; }
+  select {
+    flex: none; width: 100px; min-height: 40px; padding: 8px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .state { font-size: 12px; color: var(--muted); min-height: 16px; overflow-wrap: anywhere; }
+  .state.run { color: var(--accent); }
+  .state.run::before { content: "◌ "; display: inline-block; animation: spin .9s linear infinite; }
+  .state.ok { color: var(--good); }
+  .state.err { color: var(--bad); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* score + recomendacoes */
+  .grid-main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .score-card { display: flex; gap: 26px; align-items: center; }
+  .score-ring {
+    --score: 0; --ring: var(--good);
+    position: relative; flex: none; width: 158px; height: 158px; border-radius: 50%;
+    background: conic-gradient(var(--ring) calc(var(--score) * 1%), var(--track) 0);
+    display: grid; place-items: center;
+  }
+  .score-ring[data-band="mid"] { --ring: var(--warn); }
+  .score-ring[data-band="bad"] { --ring: var(--bad); }
+  .score-inner {
+    width: 124px; height: 124px; border-radius: 50%; background: var(--panel);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .score-inner strong { font-size: 40px; font-weight: 800; line-height: 1; color: var(--ring); letter-spacing: -.03em; }
+  .score-inner span { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .score-body { flex: 1; min-width: 0; }
+  .score-body h2 { font-size: 21px; margin-top: 4px; }
+  #generated { font-size: 12px; margin: 5px 0 14px; }
+  .metrics { display: flex; flex-direction: column; gap: 9px; }
+  .metric-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; margin-bottom: 4px; }
+  .metric-head b { font-variant-numeric: tabular-nums; font-weight: 650; }
+  .bar { height: 7px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: inherit; min-width: 2px; }
+  .bar i.bad { background: var(--bad); }
+  .bar i.warn { background: var(--warn); }
+  .bar i.info { background: var(--info); }
+  .bar i.good { background: var(--good); }
+  .bar i.accent { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+  #recs { list-style: none; counter-reset: rec; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  #recs li {
+    counter-increment: rec; position: relative; padding: 11px 12px 11px 42px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); font-size: 13.5px;
+  }
+  #recs li::before {
+    content: counter(rec); position: absolute; left: 12px; top: 11px;
+    width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+    font-size: 11px; font-weight: 700;
+  }
+  #recs li.empty::before { content: "–"; }
+
+  /* diagnosticos */
+  .diag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr)); gap: 12px; }
+  .diag { border: 1px solid var(--line); border-radius: 13px; background: var(--panel-2); padding: 14px 15px; min-width: 0; }
+  .diag-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+  .chip.blind { color: var(--bad); background: color-mix(in srgb, var(--bad) 11%, transparent); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+  .chip.loop { color: var(--warn); background: color-mix(in srgb, var(--warn) 11%, transparent); border-color: color-mix(in srgb, var(--warn) 30%, transparent); }
+  .chip.socratic { color: var(--info); background: color-mix(in srgb, var(--info) 11%, transparent); border-color: color-mix(in srgb, var(--info) 30%, transparent); }
+  .chip.cocreation { color: var(--good); background: color-mix(in srgb, var(--good) 11%, transparent); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
+  .chip.other { color: var(--muted); background: var(--track); border-color: var(--line); }
+  .sev { display: inline-flex; gap: 3px; align-items: center; margin-left: auto; }
+  .sev i { width: 6px; height: 6px; border-radius: 50%; background: var(--track); }
+  .sev.bad i.on { background: var(--bad); }
+  .sev.warn i.on { background: var(--warn); }
+  .sev.good i.on { background: var(--good); }
+  .conv { font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); background: var(--track); padding: 2px 7px; border-radius: 6px; }
+  blockquote { margin: 0 0 10px; padding: 9px 12px; border-left: 3px solid color-mix(in srgb, var(--accent) 50%, var(--line)); background: var(--panel); border-radius: 0 9px 9px 0; }
+  blockquote p { margin: 0; font-size: 13.5px; font-style: italic; }
+  .verified { display: inline-block; margin-top: 6px; font-size: 10.5px; font-weight: 700; color: var(--good); }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+  .tags span { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: var(--panel); }
+  .rec { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .rec strong { color: var(--text); font-weight: 600; }
+  .empty { color: var(--muted); font-size: 13px; margin: 0; padding: 6px 0; }
+
+  footer { color: var(--muted); font-size: 12px; padding: 4px 2px 0; display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
+  #vault-path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+  @media (max-width: 900px) {
+    .grid-main { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .wrap { width: min(1120px, 100% - 24px); }
+    .topbar .wrap { padding: 18px 0 16px; }
+    .brand h1 { font-size: 19px; }
+    .card { padding: 16px; border-radius: 14px; }
+    .score-card { flex-direction: column; align-items: flex-start; gap: 18px; }
+    .score-ring { align-self: center; }
+    .score-body { width: 100%; }
+    .diag-grid { grid-template-columns: 1fr; }
+    #recs li { padding-left: 40px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">◈</span>
+      <div>
+        <h1>Cognitive Wiki OS</h1>
+        <p>Saúde cognitiva no uso de IA + wiki em grafo no Obsidian</p>
+      </div>
+    </div>
+    <div class="topstats">
+      <span class="pill" id="conv-count">— conversas</span>
+      <span class="pill mock" id="mock-pill" hidden>dados de exemplo (mock)</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card actions" aria-label="Ações">
+    <div class="action">
+      <button class="btn" data-post="/api/collect">1 · Coletar conversas locais</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <div class="row">
+        <select id="platform" aria-label="Plataforma web">
+          <option value="chatgpt">ChatGPT</option>
+          <option value="claude">Claude</option>
+          <option value="gemini">Gemini</option>
+        </select>
+        <button class="btn" data-post="/api/web-extract/" data-platform="1">2 · Extrair da web</button>
+      </div>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <button class="btn primary" data-post="/api/diagnose">3 · Diagnosticar</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <button class="btn" data-post="/api/wiki">4 · Atualizar wiki no Obsidian</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <button class="btn" data-post="/api/frontier">5 · Pesquisar fronteira (Firecrawl)</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <button class="btn" data-post="/api/email">6 · Enviar relatório por e-mail</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+    <div class="action">
+      <a class="btn" id="open-obsidian" href="obsidian://open" target="_blank" rel="noopener">7 · Abrir no Obsidian</a>
+      <span class="state">abre o vault no app</span>
+    </div>
+    <div class="action">
+      <button class="btn pro" id="checkout">8 · Assinar Pro</button>
+      <span class="state" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <div class="grid-main">
+    <article class="card score-card">
+      <div class="score-ring" id="score-ring" data-band="good" role="img" aria-label="Score de saúde cognitiva">
+        <div class="score-inner">
+          <strong id="score-value">—</strong>
+          <span>de 100</span>
+        </div>
+      </div>
+      <div class="score-body">
+        <div class="eyebrow">Score de Saúde Cognitiva</div>
+        <h2 id="score-label">Carregando…</h2>
+        <p class="muted" id="generated"></p>
+        <div class="metrics" id="metrics"></div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="section-head">
+        <h2>O que mudar</h2>
+        <span class="muted">recomendações</span>
+      </div>
+      <ul id="recs"><li class="empty">Carregando…</li></ul>
+    </article>
+  </div>
+
+  <section class="card">
+    <div class="section-head">
+      <h2>Diagnóstico por conversa <span class="muted" id="diag-count"></span></h2>
+      <span class="muted">evidência verificada no texto original</span>
+    </div>
+    <div class="diag-grid" id="diagnoses"><p class="empty">Carregando…</p></div>
+  </section>
+
+  <footer>
+    <span>Vault: <span id="vault-path">—</span></span>
+    <span>100% local · <span id="host">127.0.0.1</span> · grafo exposto via MCP</span>
+  </footer>
+</main>
+
+<script>
+  const $ = (sel) => document.querySelector(sel);
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const CATEGORIES = {
+    blind_delegation: ["Delegação cega", "blind"],
+    frustration_loop: ["Loop de frustração", "loop"],
+    socratic_learning: ["Aprendizado socrático", "socratic"],
+    active_cocreation: ["Cocriação ativa", "cocreation"],
+  };
+  const METRICS = [
+    ["blind_delegation_pct", "Delegação cega", "bad"],
+    ["socratic_pct", "Aprendizado socrático", "info"],
+    ["frustration_loop_pct", "Loop de frustração", "warn"],
+    ["active_cocreation_pct", "Cocriação ativa", "good"],
+  ];
+  let status = null;
+
+  function setState(el, tone, text) {
+    el.className = "state " + tone;
+    el.textContent = text;
+  }
+
+  function render() {
+    const d = status && status.diagnostics;
+    const conv = (status && status.conversations) || 0;
+    $("#conv-count").textContent = `${conv} ${conv === 1 ? "conversa" : "conversas"}`;
+    $("#mock-pill").hidden = !(status && status.mock);
+    const vault = (status && status.vault) || "";
+    $("#vault-path").textContent = vault || "—";
+    $("#vault-path").title = vault;
+    $("#open-obsidian").href = vault ? "obsidian://open?path=" + encodeURIComponent(vault) : "obsidian://open";
+
+    if (!d) {
+      $("#score-value").textContent = "—";
+      $("#score-label").textContent = "Sem diagnóstico ainda";
+      $("#generated").textContent = status.error
+        ? "erro ao ler o diagnóstico: " + status.error
+        : "Rode “3 · Diagnosticar” para gerar o relatório.";
+      $("#metrics").innerHTML = "";
+      $("#recs").innerHTML = '<li class="empty">Nenhuma recomendação ainda.</li>';
+      $("#diagnoses").innerHTML = '<p class="empty">Nenhum diagnóstico por conversa ainda.</p>';
+      $("#diag-count").textContent = "";
+      return;
+    }
+
+    const score = Math.max(0, Math.min(100, Number(d.cognitive_health_score) || 0));
+    const band = score >= 75 ? "good" : score >= 50 ? "mid" : "bad";
+    const ring = $("#score-ring");
+    ring.dataset.band = band;
+    ring.style.setProperty("--score", score);
+    ring.setAttribute("aria-label", `Score de saúde cognitiva: ${Math.round(score)} de 100`);
+    $("#score-value").textContent = Math.round(score);
+    $("#score-label").textContent = { good: "Uso saudável", mid: "Zona de atenção", bad: "Risco de brain rot" }[band];
+
+    const when = d.generated_at ? new Date(d.generated_at) : null;
+    const stamp = when && !isNaN(when) ? when.toLocaleString("pt-BR") : (d.generated_at || "—");
+    $("#generated").textContent = `Gerado em ${stamp}` + (status.mock ? " · dados de exemplo" : "");
+
+    const m = d.summary_metrics || {};
+    let metricsHtml = METRICS.map(([key, label, tone]) => {
+      const value = Math.max(0, Math.min(100, Number(m[key]) || 0));
+      return `<div class="metric">
+        <div class="metric-head"><span>${label}</span><b>${value.toFixed(1)}%</b></div>
+        <div class="bar"><i class="${tone}" style="width:${value}%"></i></div>
+      </div>`;
+    }).join("");
+    const effort = Math.max(0, Number(m.avg_prompt_effort_ratio) || 0);
+    metricsHtml += `<div class="metric">
+      <div class="metric-head"><span>Esforço médio do prompt</span><b>${effort.toFixed(2)}</b></div>
+      <div class="bar"><i class="accent" style="width:${Math.min(100, effort * 100)}%"></i></div>
+    </div>`;
+    $("#metrics").innerHTML = metricsHtml;
+
+    const recs = Array.isArray(d.recommendations) ? d.recommendations : [];
+    $("#recs").innerHTML = recs.length
+      ? recs.map((r) => `<li>${esc(r)}</li>`).join("")
+      : '<li class="empty">Nenhuma recomendação.</li>';
+
+    const list = Array.isArray(d.conversation_diagnoses) ? d.conversation_diagnoses : [];
+    $("#diag-count").textContent = list.length ? `(${list.length})` : "";
+    $("#diagnoses").innerHTML = list.length
+      ? list.map((x) => {
+          const [label, tone] = CATEGORIES[x.category] || [x.category || "outro", "other"];
+          const sev = Math.max(1, Math.min(5, Number(x.severity) || 1));
+          const sevTone = sev >= 4 ? "bad" : sev >= 3 ? "warn" : "good";
+          const dots = Array.from({ length: 5 }, (_, i) => `<i class="${i < sev ? "on" : ""}"></i>`).join("");
+          const topics = (Array.isArray(x.topics) ? x.topics : []).map((t) => `<span>#${esc(t)}</span>`).join("");
+          return `<article class="diag">
+            <div class="diag-head">
+              <span class="chip ${tone}">${esc(label)}</span>
+              <span class="sev ${sevTone}" title="Severidade ${sev} de 5" aria-label="Severidade ${sev} de 5">${dots}</span>
+              <span class="conv">${esc(x.conversation_id)}</span>
+            </div>
+            <blockquote>
+              <p>“${esc(x.evidence_quote)}”</p>
+              ${x.grounding_verified ? '<span class="verified">✓ verificado</span>' : ""}
+            </blockquote>
+            ${topics ? `<div class="tags">${topics}</div>` : ""}
+            ${x.recommendation ? `<p class="rec"><strong>Recomendação:</strong> ${esc(x.recommendation)}</p>` : ""}
+          </article>`;
+        }).join("")
+      : '<p class="empty">Nenhum diagnóstico por conversa.</p>';
+  }
+
+  async function loadStatus() {
+    try {
+      const res = await fetch("/api/status");
+      status = await res.json();
+      render();
+    } catch (e) {
+      $("#score-label").textContent = "Não foi possível carregar o status";
+      $("#generated").textContent = String(e);
+    }
+  }
+
+  const actionError = (data) =>
+    data.error || (data.result && (data.result.error || data.result.reason)) || "erro sem mensagem";
+  const actionDetail = (data) => {
+    const result = data.result;
+    if (Array.isArray(result)) return `ok — ${result.length} item(ns)`;
+    if (result && typeof result === "object" && result.sent === false) return result.reason || "preview salvo";
+    return "ok";
+  };
+
+  document.querySelectorAll("button[data-post]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const state = btn.closest(".action").querySelector(".state");
+      let url = btn.dataset.post;
+      if (btn.dataset.platform) url += $("#platform").value;
+      btn.disabled = true;
+      setState(state, "run", "rodando…");
+      try {
+        const res = await fetch(url, { method: "POST" });
+        const data = await res.json();
+        if (data.ok === false || data.result?.ok === false) throw new Error(actionError(data));
+        setState(state, "ok", actionDetail(data));
+        if (["/api/collect", "/api/web-extract/", "/api/diagnose", "/api/wiki"].includes(btn.dataset.post)) await loadStatus();
+      } catch (e) {
+        setState(state, "err", "erro: " + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  $("#checkout").addEventListener("click", async () => {
+    const btn = $("#checkout");
+    const state = btn.closest(".action").querySelector(".state");
+    const tab = window.open("", "_blank");
+    btn.disabled = true;
+    setState(state, "run", "rodando…");
+    try {
+      const res = await fetch("/api/checkout", { method: "POST" });
+      const data = await res.json();
+      if (data.ok === false || data.result?.ok === false) throw new Error(actionError(data));
+      const url = typeof data.result === "string" ? data.result : data.result?.url;
+      if (!url) throw new Error("URL de checkout vazia");
+      setState(state, "ok", "ok — abrindo checkout");
+      if (tab) tab.location = url;
+      else window.open(url, "_blank");
+    } catch (e) {
+      if (tab) tab.close();
+      setState(state, "err", "erro: " + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("#host").textContent = location.host;
+  loadStatus();
+</script>
+</body>
+</html>

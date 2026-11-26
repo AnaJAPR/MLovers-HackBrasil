@@ -72,8 +72,9 @@ def verify(output_text, conversation, gold_category=None) -> dict:
         out["parsed"] = parsed
         out["format_ok"] = bool(
             match and all(k in parsed for k in KEYS) and parsed["category"] in CATEGORIES
-            and isinstance(parsed["severity"], int) and 1 <= parsed["severity"] <= 5
+            and type(parsed["severity"]) is int and 1 <= parsed["severity"] <= 5  # bool nao conta
             and isinstance(parsed["topics"], list)
+            and 10 <= len(str(parsed["evidence_quote"])) <= 200  # nao vale citar a fala inteira
         )
         if gold_category is not None:
             out["category_ok"] = parsed.get("category") == gold_category
@@ -197,7 +198,7 @@ def diagnose_conversation(conv, backend="mock"):
     return {"conversation_id": conv.get("id"), "category": parsed["category"],
             "severity": parsed["severity"], "evidence_quote": str(parsed.get("evidence_quote") or ""),
             "grounding_verified": grounding,
-            "topics": [str(t).lower() for t in parsed.get("topics") or []][:5],
+            "topics": [str(t).lower() for t in parsed.get("topics") if isinstance(parsed.get("topics"), list)][:5],
             "recommendation": str(parsed.get("recommendation") or TEMPLATES[parsed["category"]]), "backend": backend}
 
 

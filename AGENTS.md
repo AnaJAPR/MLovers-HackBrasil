@@ -65,3 +65,15 @@ OBSOLETAS — onde conflitarem, vale este AGENTS.md.
   (rode com `/home/tironi/codigos/MLovers-GitTrees/.venv/bin/python arquivo.py`). Nao instale pacotes sem pedir.
 - Chaves em `.env` (`.env.example`). Sem chave -> modulo cai em mock, avisa com `print`, nunca quebra.
 - LLM sempre via `llm.ask_json`. Firecrawl recebe so nomes de topicos. Resend recebe so o relatorio agregado.
+
+## Funcoes publicas (contrato entre modulos — nao mude a assinatura sem combinar)
+- `collector.collect(limit=200) -> list` (grava `data/conversations.json`)
+- `collector.run_web_extraction(platform: str) -> dict` (`"chatgpt"|"claude"|"gemini"`)
+- `diagnostics.build_prompt(conversation: dict) -> str`
+- `diagnostics.verify(output_text: str, conversation: dict, gold_category: str | None = None) -> dict`
+  -> `{"format_ok", "category_ok", "grounding_ok", "reward", "parsed"}`
+- `diagnostics.run_cognitive_diagnosis(backend: str | None = None) -> dict` (grava `data/diagnostics.json`)
+- `obsidian.VAULT` (Path), `obsidian.read_vault() -> dict`, `obsidian.write_note(title, body, frontmatter) -> str`
+- `obsidian.sync_conversations_to_obsidian() -> dict`
+- `research.expand_frontier(n=3) -> list` (grava `data/frontier_research.json`)
+- `integrations.send_report(to: str | None = None) -> dict`, `integrations.create_checkout() -> str` (URL)

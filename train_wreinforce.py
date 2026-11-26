@@ -24,7 +24,7 @@ Escala (GPU grande, ex. A100/H100 80GB; Qwen3-4B ou Qwen2.5-7B-Instruct):
   python train_wreinforce.py gen-data --n 1500
   python train_wreinforce.py sft --model Qwen/Qwen3-4B --out outputs/sft-4b --epochs 2
   python train_wreinforce.py rl  --model Qwen/Qwen3-4B --init-adapter outputs/sft-4b --out outputs/wr-4b \
-         --steps 300 --prompts-per-step 16 --rollouts 8 --micro-batch 8 --lam 0.1
+         --steps 300 --prompts-per-step 16 --rollouts 8 --micro-batch 8 --lam 0.1 --lr 2e-6
   ablacoes: --lam 1.0 (REINFORCE), --lam 0.0 (NSR puro), --psr-only (so positivas)
 Usar no app: DIAG_BACKEND=local LOCAL_BASE_MODEL=Qwen/Qwen3-4B LOCAL_MODEL=outputs/wr-4b
 """
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     p.add_argument("--rollouts", type=int, default=4)
     p.add_argument("--micro-batch", type=int, default=4)
     p.add_argument("--max-new-tokens", type=int, default=320)
-    p.add_argument("--lr", type=float, default=5e-6)
+    p.add_argument("--lr", type=float, default=2e-6)
     p.add_argument("--temperature", type=float, default=1.0)
     p.add_argument("--limit-prompts", type=int, default=0, help="usa so os N primeiros prompts (teste de sanidade)")
     p = sub.add_parser("eval", help="avalia no split de teste")

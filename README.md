@@ -40,7 +40,7 @@ e-mail (Resend) e abrir o checkout Pro (AbacatePay).
 | `mcp_server.py` | FastMCP (stdio; `--http` opcional) expondo vault + diagnóstico. |
 | `integrations.py` | e-mail do relatório (Resend) e checkout PIX (AbacatePay); sem chave, gera preview local. |
 | `app.py` + `index.html` | FastAPI em `127.0.0.1:8765` + HTML/CSS/JS puro; abre o navegador e dispara os módulos. |
-| `train_wreinforce.py` | treino do modelo local com W-REINFORCE (em desenvolvimento neste branch). |
+| `train_wreinforce.py` | gera o dataset sintético, faz o SFT baseline, treina com W-REINFORCE, avalia e plota. |
 
 **Contratos.** Cada módulo roda isolado: se `data/<arquivo>.json` não existir, usa `mock/<arquivo>.json`.
 `data/` é gitignored; exemplos versionados ficam em `mock/`.
@@ -186,15 +186,38 @@ precisa aparecer **literalmente** numa fala do usuário, ignorando caixa e espa�
 Só com as três OK a recompensa é `+1`; caso contrário, `-1`. O mesmo `build_prompt` da inferência é
 usado no treino, então mudar o classificador muda o que o modelo aprende.
 
-Comandos planejados (**em desenvolvimento**; arquivo será `train_wreinforce.py`, em máquina com GPU):
+A loss é a do paper, sem baseline e sem KL: `loss = -(λ·Σ_{r=+1} log π(y) − Σ_{r=-1} log π(y)) / tokens`,
+com λ = 0,1. Para estabilidade com recompensa esparsa, a função tem dois cuidados: as respostas truncadas
+ficam fora da loss (*overlong filtering*), e o NSR não penaliza o token EOS. Sem isso, o modelo para de
+terminar as respostas e colapsa. Instale o extra de treino (`uv sync --extra train`) e rode:
 
 ```bash
-python train_wreinforce.py gen-data --n 1500
-python train_wreinforce.py sft --model Qwen/Qwen3-4B
-python train_wreinforce.py rl --model Qwen/Qwen3-4B --lam 0.1
-python train_wreinforce.py eval
-python train_wreinforce.py plot
+python train_wreinforce.py gen-data --n 1500                      # dataset sintetico rotulado (Claude)
+python train_wreinforce.py sft  --model Qwen/Qwen3-4B --out outputs/sft --epochs 2
+python train_wreinforce.py rl   --model Qwen/Qwen3-4B --init-adapter outputs/sft --out outputs/wr \
+       --steps 300 --prompts-per-step 16 --rollouts 8 --lam 0.1 --lr 2e-6
+python train_wreinforce.py eval --model Qwen/Qwen3-4B --adapter outputs/wr --out outputs/wr/eval.json
+python train_wreinforce.py plot --runs outputs/base outputs/sft outputs/wr --out outputs/comparison.png
 ```
+Ablações: `--lam 1.0` (REINFORCE padrão) e `--psr-only` (só reforço positivo).
+
+**Teste pequeno já rodado** (Qwen2.5-1.5B-Instruct, RTX A4000 16 GB, 200 conversas sintéticas, 26 de
+teste, 60 passos de RL partindo do SFT):
+
+| Modelo | Formato válido | Acurácia de categoria | Evidência literal verificada |
+|---|---|---|---|
+| Base | 96% | 46% | 73% |
+| SFT | 96% | 65% | 85% |
+| SFT + só PSR | 96% | 58% | 85% |
+| **SFT + W-REINFORCE** | 96% | 65% | **88%** |
+
+![comparação](train_data/comparison_qwen2.5-1.5b.png)
+
+Durante o treino, a recompensa do W-REINFORCE subiu de −0,42 para −0,17 (de 9 para 13 rollouts corretos
+em 32), sem truncamento. Só PSR caiu de −0,33 para −0,46 e encurtou as respostas, o colapso de
+diversidade que o paper descreve. Com 26 exemplos de teste, cada ponto equivale a ~4%: o resultado é
+direcional, e a escala (modelo de 4-7B, dataset de 1.500) fica para a GPU grande. Num modelo de 0.5B e com
+lr alto (2e-5), o termo negativo colapsa o modelo (recompensa positiva rara demais); use lr ≈ 1e-6 a 2e-6.
 Para usar o modelo no app, defina no `.env`:
 
 ```bash

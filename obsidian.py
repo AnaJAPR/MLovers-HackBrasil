@@ -6,6 +6,7 @@ import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -206,6 +207,43 @@ def ensure_graph_colors() -> None:
     graph_path.write_text(json.dumps(graph, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _extract_concepts(conversation: dict, existing: list) -> list:
+    """Monta o prompt da conversa, chama o LLM e normaliza os conceitos extraidos."""
+    import llm
+    blocks, total = [], 0
+    for message in conversation.get("messages") or []:
+        role = message.get("role")
+        text = str(message.get("content") or "")[:1500 if role == "user" else 500]
+        block = f"{'USUARIO' if role == 'user' else 'IA'}: {text}\n"
+        if total + len(block) > 8000:
+            break
+        blocks.append(block)
+        total += len(block)
+    prompt = f"""Voce mantem uma wiki de conceitos em Obsidian (estilo LLM Wiki) a partir das conversas do usuario.
+
+Conceitos que ja existem no vault (reutilize EXATAMENTE estes titulos quando o assunto for o mesmo, para nao duplicar notas):
+{', '.join(existing[:200]) or '(vault vazio)'}
+
+Conversa:
+{''.join(blocks)}
+
+Extraia de 1 a 5 conceitos TECNICOS e ESPECIFICOS realmente discutidos nesta conversa (nada generico como "Programacao" ou "Estudo"). No summary, escreva de 2 a 5 bullets em markdown sobre o que o usuario discutiu, aprendeu ou decidiu sobre esse conceito. Em related, liste titulos de conceitos relacionados.
+
+Responda APENAS com JSON: {{"concepts": [{{"title": "Nome Do Conceito", "summary": "- bullet 1\\n- bullet 2", "related": ["Outro Conceito"]}}]}}"""
+    answer = llm.ask_json(prompt)
+    raw_concepts = answer.get("concepts") if isinstance(answer, dict) else answer
+    concepts = []
+    for item in raw_concepts or []:
+        if isinstance(item, dict) and str(item.get("title") or "").strip():
+            related = item.get("related") if isinstance(item.get("related"), list) else []
+            concepts.append({
+                "title": str(item["title"]).strip(),
+                "summary": str(item.get("summary") or "").strip(),
+                "related": [str(r).strip() for r in related if str(r).strip()],
+            })
+    return concepts
+
+
 def sync_conversations_to_obsidian(use_llm: bool = True) -> dict:
     """Ingere as conversas ainda nao ingeridas como notas de conceito no vault."""
     state = _load_state()
@@ -231,100 +269,84 @@ def sync_conversations_to_obsidian(use_llm: bool = True) -> dict:
     existing = list(read_vault())
     summary = {"new_conversations": 0, "created": 0, "appended": 0, "ignored": 0, "vault": str(VAULT)}
 
-    for conversation in conversations:
-        if not isinstance(conversation, dict):
-            continue
-        cid = str(conversation.get("id") or "")
-        if not cid or cid in state["ingested"]:
-            continue
-        diagnosis = diagnoses.get(cid) or {}
-        heading = str(conversation.get("title") or "Conversa").replace("\n", " ").strip()
-        date = str(conversation.get("created_at") or "")[:10] or "sem-data"
-        source = str(conversation.get("source") or "desconhecido")
-        default_summary = f"- Discutido na conversa: {heading}"
-        concepts = []
-        if use_llm:
-            try:
-                import llm
-                blocks, total = [], 0
-                for message in conversation.get("messages") or []:
-                    role = message.get("role")
-                    text = str(message.get("content") or "")[:1500 if role == "user" else 500]
-                    block = f"{'USUARIO' if role == 'user' else 'IA'}: {text}\n"
-                    if total + len(block) > 8000:
-                        break
-                    blocks.append(block)
-                    total += len(block)
-                prompt = f"""Voce mantem uma wiki de conceitos em Obsidian (estilo LLM Wiki) a partir das conversas do usuario.
+    pending = [
+        conversation for conversation in conversations
+        if isinstance(conversation, dict) and str(conversation.get("id") or "")
+        and str(conversation.get("id")) not in state["ingested"]
+    ]
 
-Conceitos que ja existem no vault (reutilize EXATAMENTE estes titulos quando o assunto for o mesmo, para nao duplicar notas):
-{', '.join(existing[:200]) or '(vault vazio)'}
+    # lotes de 6: extracao no LLM em paralelo; escrita das notas e do state sequencial, na ordem
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for start in range(0, len(pending), 6):
+            batch = pending[start:start + 6]
+            if use_llm:
+                futures = [pool.submit(_extract_concepts, conversation, list(existing)) for conversation in batch]
+                extracted = []
+                for conversation, future in zip(batch, futures):
+                    try:
+                        extracted.append(future.result())
+                    except Exception as error:
+                        print(f"[obsidian] LLM falhou em '{conversation.get('title')}': {error}")
+                        extracted.append([])
+            else:
+                extracted = [[] for _ in batch]
 
-Conversa:
-{''.join(blocks)}
+            for conversation, concepts in zip(batch, extracted):
+                cid = str(conversation.get("id"))
+                diagnosis = diagnoses.get(cid) or {}
+                heading = str(conversation.get("title") or "Conversa").replace("\n", " ").strip()
+                date = str(conversation.get("created_at") or "")[:10] or "sem-data"
+                source = str(conversation.get("source") or "desconhecido")
+                default_summary = f"- Discutido na conversa: {heading}"
 
-Extraia de 1 a 5 conceitos TECNICOS e ESPECIFICOS realmente discutidos nesta conversa (nada generico como "Programacao" ou "Estudo"). No summary, escreva de 2 a 5 bullets em markdown sobre o que o usuario discutiu, aprendeu ou decidiu sobre esse conceito. Em related, liste titulos de conceitos relacionados.
+                if not concepts:
+                    topics = diagnosis.get("topics") or []
+                    if isinstance(topics, str):
+                        topics = [topics]
+                    topics = [t.strip() for t in topics if isinstance(t, str) and t.strip()]
+                    concepts = [
+                        {
+                            "title": topic.title(),
+                            "summary": default_summary,
+                            "related": [other.title() for other in topics if other != topic],
+                        }
+                        for topic in topics
+                    ]
 
-Responda APENAS com JSON: {{"concepts": [{{"title": "Nome Do Conceito", "summary": "- bullet 1\\n- bullet 2", "related": ["Outro Conceito"]}}]}}"""
-                answer = llm.ask_json(prompt)
-                raw_concepts = answer.get("concepts") if isinstance(answer, dict) else answer
-                for item in raw_concepts or []:
-                    if isinstance(item, dict) and str(item.get("title") or "").strip():
-                        related = item.get("related") if isinstance(item.get("related"), list) else []
-                        concepts.append({
-                            "title": str(item["title"]).strip(),
-                            "summary": str(item.get("summary") or "").strip(),
-                            "related": [str(r).strip() for r in related if str(r).strip()],
-                        })
-            except Exception as error:
-                print(f"[obsidian] LLM falhou em '{conversation.get('title')}': {error}")
+                try:
+                    severity = int(diagnosis.get("severity") or 0)
+                except (TypeError, ValueError):
+                    severity = 0
+                tags = ["source/prompt"]
+                if (diagnosis.get("category") == "blind_delegation" and severity >= 2) or (
+                    diagnosis.get("category") == "frustration_loop" and severity >= 3
+                ):
+                    tags.append("alert/brain-rot")
 
-        if not concepts:
-            topics = diagnosis.get("topics") or []
-            if isinstance(topics, str):
-                topics = [topics]
-            topics = [t.strip() for t in topics if isinstance(t, str) and t.strip()]
-            concepts = [
-                {
-                    "title": topic.title(),
-                    "summary": default_summary,
-                    "related": [other.title() for other in topics if other != topic],
-                }
-                for topic in topics
-            ]
+                seen = set()
+                for concept in concepts:
+                    title = concept["title"].strip()
+                    if not title or title.lower() in seen:
+                        continue
+                    seen.add(title.lower())
+                    summary_text = concept["summary"] or default_summary
+                    related = [r for r in concept["related"] if r.lower() != title.lower()]
+                    body = f"\n## {heading} ({date}, {source})\n{summary_text}\n"
+                    if related:
+                        body += "\nRelacionados: " + " ".join(f"[[{r}]]" for r in related) + "\n"
+                    result = write_note(title, body, {
+                        "type": "concept", "source": "prompt", "tags": list(tags), "conversations": [cid],
+                    })
+                    summary[result] += 1
+                    if title not in existing:
+                        existing.append(title)
 
-        try:
-            severity = int(diagnosis.get("severity") or 0)
-        except (TypeError, ValueError):
-            severity = 0
-        tags = ["source/prompt"]
-        if diagnosis.get("category") in ("blind_delegation", "frustration_loop") and severity >= 3:
-            tags.append("alert/brain-rot")
-
-        seen = set()
-        for concept in concepts:
-            title = concept["title"].strip()
-            if not title or title.lower() in seen:
-                continue
-            seen.add(title.lower())
-            summary_text = concept["summary"] or default_summary
-            related = [r for r in concept["related"] if r.lower() != title.lower()]
-            body = f"\n## {heading} ({date}, {source})\n{summary_text}\n"
-            if related:
-                body += "\nRelacionados: " + " ".join(f"[[{r}]]" for r in related) + "\n"
-            result = write_note(title, body, {
-                "type": "concept", "source": "prompt", "tags": list(tags), "conversations": [cid],
-            })
-            summary[result] += 1
-            if title not in existing:
-                existing.append(title)
-
-        state = _load_state()
-        if cid not in state["ingested"]:
-            state["ingested"].append(cid)
-            _save_state(state)
-        summary["new_conversations"] += 1
-        print(f"[obsidian] conversa '{heading}' ingerida ({len(seen)} conceito(s))")
+                state = _load_state()
+                if cid not in state["ingested"]:
+                    state["ingested"].append(cid)
+                    _save_state(state)
+                summary["new_conversations"] += 1
+                print(f"[obsidian] conversa '{heading}' ingerida ({len(seen)} conceito(s))")
 
     ensure_graph_colors()
     return summary

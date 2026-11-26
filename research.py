@@ -4,6 +4,7 @@ pesquisa fontes reais no Firecrawl e escreve a nota verde so com base nelas."""
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -36,8 +37,7 @@ def expand_frontier(n: int = 3) -> list:
                 degree[title] += 1   # link de saida
                 degree[target] += 1  # backlink
         tags = (note["frontmatter"] or {}).get("tags") or []
-        if isinstance(tags, str):
-            tags = [tags]
+        tags = [tags] if isinstance(tags, str) else tags if isinstance(tags, list) else []
         if any(str(tag).lstrip("#") == "alert/brain-rot" for tag in tags):
             blind.append(title)
     central = [
@@ -69,18 +69,24 @@ Responda APENAS com JSON: {{"topics": [{{"topic": "...", "why": "...", "search_q
         print(f"[research] LLM indisponivel, nenhum topico proposto: {error}", file=sys.stderr)
         answer = {}
     proposals = answer.get("topics") if isinstance(answer, dict) else answer
+    proposals = proposals if isinstance(proposals, list) else []
     # notas que o usuario deletou no Obsidian nunca voltam (e nao gastam Firecrawl)
-    seen = set(canonical) | {t.lower() for t in obsidian._load_state()["ignored"]}
+    try:
+        ignored = obsidian._load_state()["ignored"]
+    except RuntimeError as error:
+        raise RuntimeError(f"[research] state do vault indisponivel, nada foi expandido: {error}") from error
+    seen = set(canonical) | {t.lower() for t in ignored}
     topics = []
-    for item in proposals or []:
+    for item in proposals:
         if len(topics) >= n or not isinstance(item, dict):
             continue
         topic = str(item.get("topic") or "").strip()
         if not topic or topic.lower() in seen:
             continue
+        raw_related = item.get("related") if isinstance(item.get("related"), list) else []
         related = list(dict.fromkeys(
-            canonical[str(raw).strip().lower()] for raw in item.get("related") or []
-            if str(raw).strip().lower() in canonical
+            canonical[raw.strip().lower()] for raw in raw_related
+            if isinstance(raw, str) and raw.strip().lower() in canonical
         ))
         seen.add(topic.lower())
         topics.append({
@@ -139,6 +145,16 @@ Responda APENAS com JSON: {{"summary_md": "...", "key_points": ["..."]}}""")
                 summary = "\n".join(f"- {point}" for point in answer["key_points"] if str(point).strip())
             if not summary:
                 print(f"[research] '{topic}': resumo vazio, nota nao criada")
+                results.append(entry)
+                continue
+            # citacao valida = marcador [n] com n dentro das fontes realmente recebidas
+            summary = re.sub(
+                r"\[(\d+)\]",
+                lambda match: match.group(0) if 1 <= int(match.group(1)) <= len(docs) else "",
+                summary,
+            )
+            if not any(1 <= int(match) <= len(docs) for match in re.findall(r"\[(\d+)\]", summary)):
+                print(f"[research] '{topic}': resumo sem citacao valida das fontes, nota nao criada")
                 results.append(entry)
                 continue
             body = (

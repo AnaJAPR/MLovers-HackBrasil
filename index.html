@@ -319,6 +319,7 @@
       <span class="muted">evidência verificada no texto original</span>
     </div>
     <div class="diag-grid" id="diagnoses"><p class="empty">Carregando…</p></div>
+    <button class="btn" id="diag-toggle" style="margin-top: 12px" hidden></button>
   </section>
 
   <section class="card" id="frontier-card">
@@ -357,6 +358,7 @@
     ["active_cocreation_pct", "Cocriação ativa", "good"],
   ];
   let status = null;
+  let showAllDiagnoses = false;
 
   function setState(el, tone, text) {
     el.className = "state " + tone;
@@ -444,6 +446,7 @@
       $("#recs").replaceChildren(el("li", "empty", "Nenhuma recomendação ainda."));
       $("#diagnoses").replaceChildren(el("p", "empty", "Nenhum diagnóstico por conversa ainda."));
       $("#diag-count").textContent = "";
+      $("#diag-toggle").hidden = true;
       return;
     }
 
@@ -486,7 +489,13 @@
       : [el("li", "empty", "Nenhuma recomendação.")]));
 
     $("#diag-count").textContent = list.length ? `(${list.length})` : "";
-    const cards = list.map((x) => {
+    const unhealthy = (x) => x.category === "blind_delegation" || x.category === "frustration_loop";
+    const sorted = [...list].sort((a, b) =>
+      (unhealthy(b) - unhealthy(a)) || (Number(b.severity) || 1) - (Number(a.severity) || 1));
+    const toggle = $("#diag-toggle");
+    toggle.hidden = sorted.length <= 8;
+    toggle.textContent = showAllDiagnoses ? "mostrar menos" : `mostrar todos (${sorted.length})`;
+    const cards = (showAllDiagnoses ? sorted : sorted.slice(0, 8)).map((x) => {
       const [label, tone] = CATEGORIES[x.category] || [x.category || "outro", "other"];
       const sev = Math.max(1, Math.min(5, Number(x.severity) || 1));
       const sevTone = sev >= 4 ? "bad" : sev >= 3 ? "warn" : "good";
@@ -602,6 +611,11 @@
       ? "Checkout em modo demo: ABACATEPAY_API_KEY não configurada, nenhuma cobrança foi feita."
       : "Obrigado por assinar o Pro! Plano Pro ativado nesta instalação local.";
   }
+
+  $("#diag-toggle").addEventListener("click", () => {
+    showAllDiagnoses = !showAllDiagnoses;
+    render();
+  });
 
   $("#host").textContent = location.host;
   $("#platform").addEventListener("change", renderWebAge);

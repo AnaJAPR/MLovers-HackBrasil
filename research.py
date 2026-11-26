@@ -106,31 +106,28 @@ Responda APENAS com JSON: {{"topics": [{{"topic": "...", "why": "...", "search_q
         topic = proposal["topic"]
         entry = {"topic": topic, "why": proposal["why"], "note_title": topic, "sources": []}
         try:
-            if not api_key:
-                results.append(entry)
-                continue
-            response = Firecrawl(api_key=api_key).search(
-                proposal["search_query"], limit=3,
-                scrape_options={"formats": ["markdown"], "only_main_content": True},
-            )
             docs = []
-            for item in getattr(response, "web", None) or []:
-                meta = getattr(item, "metadata", None)
-                url = getattr(item, "url", None) or (meta and (meta.url or meta.source_url))
-                title = getattr(item, "title", None) or (meta and meta.title) or url
-                markdown = getattr(item, "markdown", None)
-                if url and markdown:
-                    docs.append({"title": str(title), "url": str(url), "markdown": str(markdown)})
-            docs = docs[:3]
-            if not docs:
-                print(f"[research] '{topic}': Firecrawl nao trouxe texto, nota nao criada")
-                results.append(entry)
-                continue
-            blocks = "\n\n".join(
-                f"[{i}] {doc['title']} — {doc['url']}\n{doc['markdown'][:3000]}"
-                for i, doc in enumerate(docs, 1)
-            )
-            answer = llm.ask_json(f"""Escreva uma nota de wiki tecnica usando SOMENTE as fontes abaixo.
+            if api_key:
+                response = Firecrawl(api_key=api_key).search(
+                    proposal["search_query"], limit=3,
+                    scrape_options={"formats": ["markdown"], "only_main_content": True},
+                )
+                for item in getattr(response, "web", None) or []:
+                    meta = getattr(item, "metadata", None)
+                    url = getattr(item, "url", None) or (meta and (meta.url or meta.source_url))
+                    title = getattr(item, "title", None) or (meta and meta.title) or url
+                    markdown = getattr(item, "markdown", None)
+                    if url and markdown:
+                        docs.append({"title": str(title), "url": str(url), "markdown": str(markdown)})
+                docs = docs[:3]
+                if not docs:
+                    print(f"[research] '{topic}': Firecrawl nao trouxe texto, nota nao criada")
+            if docs:
+                blocks = "\n\n".join(
+                    f"[{i}] {doc['title']} — {doc['url']}\n{doc['markdown'][:3000]}"
+                    for i, doc in enumerate(docs, 1)
+                )
+                answer = llm.ask_json(f"""Escreva uma nota de wiki tecnica usando SOMENTE as fontes abaixo.
 Topico: {topic}
 Por que importa: {proposal['why']}
 
@@ -140,36 +137,33 @@ Fontes:
 Nota em markdown de 6 a 12 linhas, citando cada afirmacao com [1], [2] ou [3]. Use so as fontes, sem conhecimento externo; se um ponto nao estiver nelas, omita.
 
 Responda APENAS com JSON: {{"summary_md": "...", "key_points": ["..."]}}""")
-            summary = str(answer.get("summary_md") or "").strip() if isinstance(answer, dict) else ""
-            if not summary and isinstance(answer, dict) and isinstance(answer.get("key_points"), list):
-                summary = "\n".join(f"- {point}" for point in answer["key_points"] if str(point).strip())
-            if not summary:
-                print(f"[research] '{topic}': resumo vazio, nota nao criada")
-                results.append(entry)
-                continue
-            # citacao valida = marcador [n] com n dentro das fontes realmente recebidas
-            summary = re.sub(
-                r"\[(\d+)\]",
-                lambda match: match.group(0) if 1 <= int(match.group(1)) <= len(docs) else "",
-                summary,
-            )
-            if not any(1 <= int(match) <= len(docs) for match in re.findall(r"\[(\d+)\]", summary)):
-                print(f"[research] '{topic}': resumo sem citacao valida das fontes, nota nao criada")
-                results.append(entry)
-                continue
-            body = (
-                f"## Por que isso importa para voce\n{proposal['why']}\n\n"
-                f"## Resumo\n{summary}\n\n"
-                f"## Conecta com\n{' '.join(f'[[{r}]]' for r in proposal['related']) or '(sem conexoes identificadas)'}\n\n"
-                f"## Fontes\n"
-                + "\n".join(f"{i}. [{doc['title']}]({doc['url']})" for i, doc in enumerate(docs, 1))
-            )
-            status = obsidian.write_note(topic, body, {
-                "type": "concept", "source": "firecrawl", "tags": ["source/firecrawl"],
-                "source_urls": [doc["url"] for doc in docs],
-            })
-            entry["sources"] = [{"title": doc["title"], "url": doc["url"]} for doc in docs]
-            print(f"[research] nota verde '{topic}' {status}")
+                summary = str(answer.get("summary_md") or "").strip() if isinstance(answer, dict) else ""
+                if not summary and isinstance(answer, dict) and isinstance(answer.get("key_points"), list):
+                    summary = "\n".join(f"- {point}" for point in answer["key_points"] if str(point).strip())
+                # citacao valida = marcador [n] com n dentro das fontes realmente recebidas
+                summary = re.sub(
+                    r"\[(\d+)\]",
+                    lambda match: match.group(0) if 1 <= int(match.group(1)) <= len(docs) else "",
+                    summary,
+                )
+                if not summary:
+                    print(f"[research] '{topic}': resumo vazio, nota nao criada")
+                elif not any(1 <= int(match) <= len(docs) for match in re.findall(r"\[(\d+)\]", summary)):
+                    print(f"[research] '{topic}': resumo sem citacao valida das fontes, nota nao criada")
+                else:
+                    body = (
+                        f"## Por que isso importa para voce\n{proposal['why']}\n\n"
+                        f"## Resumo\n{summary}\n\n"
+                        f"## Conecta com\n{' '.join(f'[[{r}]]' for r in proposal['related']) or '(sem conexoes identificadas)'}\n\n"
+                        f"## Fontes\n"
+                        + "\n".join(f"{i}. [{doc['title']}]({doc['url']})" for i, doc in enumerate(docs, 1))
+                    )
+                    status = obsidian.write_note(topic, body, {
+                        "type": "concept", "source": "firecrawl", "tags": ["source/firecrawl"],
+                        "source_urls": [doc["url"] for doc in docs],
+                    })
+                    entry["sources"] = [{"title": doc["title"], "url": doc["url"]} for doc in docs]
+                    print(f"[research] nota verde '{topic}' {status}")
         except Exception as error:
             print(f"[research] falhou em '{topic}': {error}", file=sys.stderr)
         results.append(entry)

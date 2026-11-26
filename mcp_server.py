@@ -39,22 +39,6 @@ def _find(vault: dict, title: str):
     return None, None
 
 
-def _missing(vault: dict, title: str) -> str:
-    close = difflib.get_close_matches(title, list(vault), n=5, cutoff=0.3)
-    return f"Nota '{title}' nao encontrada." + (f" Parecidas: {', '.join(close)}." if close else "")
-
-
-def _diag() -> dict:
-    for folder in (obsidian.DATA, obsidian.MOCK):
-        path = folder / "diagnostics.json"
-        if path.exists():
-            try:
-                return json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as error:
-                print(f"[mcp] {path} invalido: {error}", file=sys.stderr)
-    return {}
-
-
 @mcp.tool
 def search_wiki(query: str, limit: int = 8) -> str:
     """Busca por texto (sem diferenciar maiusculas/acentos) no titulo e no corpo do wiki.
@@ -82,11 +66,13 @@ def read_node(title: str) -> str:
     vault = obsidian.read_vault()
     name, node = _find(vault, title)
     if not node:
-        return _missing(vault, title)
+        close = difflib.get_close_matches(title, list(vault), n=5, cutoff=0.3)
+        return f"Nota '{title}' nao encontrada." + (f" Parecidas: {', '.join(close)}." if close else "")
     fm = node["frontmatter"] or {}
     meta = "\n".join(f"- {k}: {', '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in fm.items())
     back = [other for other, item in vault.items() if any(_norm(link) == _norm(name) for link in item["links"])]
-    return (f"# {name}\n\nFonte: {_source(node)[0]} ({_source(node)[1]})\n\n## Frontmatter\n{meta or '(vazio)'}\n\n"
+    source, color = _source(node)
+    return (f"# {name}\n\nFonte: {source} ({color})\n\n## Frontmatter\n{meta or '(vazio)'}\n\n"
             f"## Conteudo\n{node['body'].strip()}\n\n## Backlinks\n" + ("\n".join(f"- [[{b}]]" for b in back) if back else "(nenhum)"))
 
 
@@ -97,15 +83,20 @@ def get_graph_neighbors(title: str) -> str:
     vault = obsidian.read_vault()
     name, node = _find(vault, title)
     if not node:
-        return _missing(vault, title)
+        close = difflib.get_close_matches(title, list(vault), n=5, cutoff=0.3)
+        return f"Nota '{title}' nao encontrada." + (f" Parecidas: {', '.join(close)}." if close else "")
     def describe(item_title: str) -> str:
         real, item = _find(vault, item_title)
-        return f"- {real} ({_source(item)[0]}, {_source(item)[1]})" if item else f"- {item_title} (nota ainda nao criada)"
+        if not item:
+            return f"- {item_title} (nota ainda nao criada)"
+        source, color = _source(item)
+        return f"- {real} ({source}, {color})"
     resolved = {t: {_find(vault, l)[0] for l in n["links"]} - {None} for t, n in vault.items()}
     out, back = node["links"], [o for o, ls in resolved.items() if name in ls]
     near = resolved[name] | set(back)
     second = set().union(*(resolved[t] | {o for o, ls in resolved.items() if t in ls} for t in near)) - near - {name}
-    return (f"# {name} ({_source(node)[0]}, {_source(node)[1]})\n\n## Links de saida\n" + ("\n".join(map(describe, out)) or "(nenhum)")
+    source, color = _source(node)
+    return (f"# {name} ({source}, {color})\n\n## Links de saida\n" + ("\n".join(map(describe, out)) or "(nenhum)")
             + "\n\n## Backlinks\n" + ("\n".join(map(describe, back)) or "(nenhum)")
             + "\n\n## Vizinhos de 2 saltos\n" + ("\n".join(map(describe, sorted(second))) or "(nenhum)"))
 
@@ -128,7 +119,16 @@ def list_frontier_nodes() -> str:
 def get_cognitive_summary() -> str:
     """Resume a saude cognitiva do usuario: score, metricas, recomendacoes e conceitos em
     alert/brain-rot. Use no inicio da conversa para adaptar seu jeito de ajudar."""
-    diag = _diag()
+    diag = {}
+    for folder in (obsidian.DATA, obsidian.MOCK):
+        path = folder / "diagnostics.json"
+        if not path.exists():
+            continue
+        try:
+            diag = json.loads(path.read_text(encoding="utf-8"))
+            break
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"[mcp] {path} invalido: {error}", file=sys.stderr)
     if not diag:
         return "Diagnostico indisponivel: rode diagnostics.run_cognitive_diagnosis()."
     alerts = [n for n, node in sorted(obsidian.read_vault().items())

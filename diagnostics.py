@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import re
-import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -216,7 +215,6 @@ def run_cognitive_diagnosis(backend=None):
             old = {d["conversation_id"]: d for d in json.loads(out_file.read_text(encoding="utf-8")).get("conversation_diagnoses", [])}
         except Exception:
             old = {}
-    ids = [c.get("id") for c in conversations]
     # cache so vale para o mesmo backend
     pending = [c for c in conversations if old.get(c.get("id"), {}).get("backend") != backend]
     if backend == "claude" and len(pending) > 1:  # so a chamada HTTP paraleliza; local (GPU) e mock seguem sequenciais
@@ -228,7 +226,7 @@ def run_cognitive_diagnosis(backend=None):
     it = iter(fresh)
     diagnoses = [old[c["id"]] if old.get(c.get("id"), {}).get("backend") == backend else next(it)
                  for c in conversations]
-    print(f"{new} novas, {len(ids) - new} do cache (backend {backend})")
+    print(f"{new} novas, {len(conversations) - new} do cache (backend {backend})")
 
     n = len(diagnoses) or 1
     pct = {cat: round(100.0 * sum(d["category"] == cat for d in diagnoses) / n, 1) for cat in CATEGORIES}
@@ -242,14 +240,9 @@ def run_cognitive_diagnosis(backend=None):
             ratios.append(u / a)
     summary["avg_prompt_effort_ratio"] = round(sum(ratios) / len(ratios), 2) if ratios else 0.0
 
-    def health(d):
-        if d["category"] == "blind_delegation":
-            return 100 - 15 * d["severity"]
-        if d["category"] == "frustration_loop":
-            return 100 - 12 * d["severity"]
-        return 100
-
-    score = int(sum(health(d) for d in diagnoses) / len(diagnoses)) if diagnoses else 0
+    score = int(sum(100 - (15 if d["category"] == "blind_delegation" else 12) * d["severity"]
+                    if d["category"] in ("blind_delegation", "frustration_loop") else 100
+                    for d in diagnoses) / len(diagnoses)) if diagnoses else 0
     healthy = max(("socratic_learning", "active_cocreation"), key=lambda c: pct[c])
     problems = sorted(("blind_delegation", "frustration_loop"), key=lambda c: -pct[c])[:2]
     recommendations = [TEMPLATES[c] for c in problems] + [TEMPLATES[healthy]]

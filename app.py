@@ -99,41 +99,28 @@ def api_checkout():
     return call("integrations", "create_checkout")
 
 
+def read_state(name, fallback=False):
+    """Le data/<name>; sem o arquivo (e com fallback) le mock/<name>. Devolve (valor, erro)."""
+    path = BASE / "data" / name
+    if fallback and not path.exists():
+        path = BASE / "mock" / name
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig")), None
+    except Exception as e:
+        return None, str(e)
+
+
 @app.get("/api/status")
 def api_status():
-    mock = False
-    error = None
-    diag_path = BASE / "data" / "diagnostics.json"
-    if diag_path.exists():
-        try:
-            diagnostics = json.loads(diag_path.read_text(encoding="utf-8-sig"))
-        except Exception as e:
-            diagnostics, error = None, str(e)
-    else:
-        mock = True
-        try:
-            diagnostics = json.loads((BASE / "mock" / "diagnostics.json").read_text(encoding="utf-8-sig"))
-        except Exception as e:
-            diagnostics, error = None, str(e)
-    try:
-        conversations = json.loads((BASE / "data" / "conversations.json").read_text(encoding="utf-8-sig"))
-        conversations = len(conversations) if isinstance(conversations, list) else 0
-    except Exception:
-        conversations = 0
-    frontier_path = BASE / "data" / "frontier_research.json"
-    frontier_mock = not frontier_path.exists()
-    if frontier_mock:
-        frontier_path = BASE / "mock" / "frontier_research.json"
-    try:
-        frontier = json.loads(frontier_path.read_text(encoding="utf-8-sig"))
-        frontier = frontier if isinstance(frontier, list) else []
-    except Exception:
-        frontier = []
-    try:
-        web_extraction = json.loads((BASE / "data" / "web_extraction_state.json").read_text(encoding="utf-8-sig"))
-        web_extraction = web_extraction if isinstance(web_extraction, dict) else {}
-    except Exception:
-        web_extraction = {}
+    mock = not (BASE / "data" / "diagnostics.json").exists()
+    diagnostics, error = read_state("diagnostics.json", fallback=True)
+    conversations, _ = read_state("conversations.json")
+    conversations = len(conversations) if isinstance(conversations, list) else 0
+    frontier_mock = not (BASE / "data" / "frontier_research.json").exists()
+    frontier, _ = read_state("frontier_research.json", fallback=True)
+    frontier = frontier if isinstance(frontier, list) else []
+    web_extraction, _ = read_state("web_extraction_state.json")
+    web_extraction = web_extraction if isinstance(web_extraction, dict) else {}
     vault = Path(os.environ.get("OBSIDIAN_VAULT_PATH") or Path.home() / "AIWikiVault").expanduser()
     return {"diagnostics": diagnostics, "mock": mock, "error": error, "conversations": conversations,
             "vault": str(vault), "frontier": frontier, "frontier_mock": frontier_mock,

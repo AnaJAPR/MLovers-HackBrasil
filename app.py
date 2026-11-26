@@ -62,7 +62,7 @@ def api_collect():
 def api_web_extract(platform: str):
     if platform not in ("chatgpt", "claude", "gemini"):
         return {"ok": False, "error": f"plataforma invalida: {platform}"}
-    return call("collector", "run_web_extraction", platform)
+    return call("collector", "run_web_extraction", platform, 50, True)  # botao = sob demanda (force)
 
 
 @app.post("/api/diagnose")

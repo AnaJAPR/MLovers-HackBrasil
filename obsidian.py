@@ -5,7 +5,10 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -352,8 +355,44 @@ def sync_conversations_to_obsidian(use_llm: bool = True) -> dict:
     return summary
 
 
+def backup_vault_to_git() -> dict:
+    """Backup do vault num repositorio git (opcionalmente com remote em VAULT_GIT_REMOTE)."""
+    git = shutil.which("git")
+    if not git:
+        return {"ok": False, "error": "git nao encontrado"}
+    VAULT.mkdir(parents=True, exist_ok=True)
+
+    def run(*args) -> subprocess.CompletedProcess:
+        return subprocess.run([git, "-C", str(VAULT), *args], capture_output=True, text=True, encoding="utf-8")
+
+    if run("rev-parse", "--is-inside-work-tree").returncode != 0:
+        run("init")
+        (VAULT / ".gitignore").write_text(".obsidian/workspace*\n.wiki_state.json.tmp\n", encoding="utf-8")
+    remote = (os.getenv("VAULT_GIT_REMOTE") or "").strip()
+    if remote and run("remote", "get-url", "origin").returncode != 0:
+        run("remote", "add", "origin", remote)
+
+    run("add", "-A")
+    commit = run("commit", "-m", f"wiki: atualizacao {datetime.now().isoformat(timespec='seconds')}")
+    committed = commit.returncode == 0
+    if not committed and "nothing to commit" not in (commit.stdout + commit.stderr).lower():
+        return {"ok": False, "error": commit.stderr}
+
+    pushed = False
+    if run("remote", "get-url", "origin").returncode == 0:
+        push = run("push", "-u", "origin", "HEAD")
+        if push.returncode != 0:
+            return {"ok": False, "error": push.stderr}
+        pushed = True
+    return {"ok": True, "committed": committed, "pushed": pushed}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingere conversas como notas de conceito no vault Obsidian.")
     parser.add_argument("--no-llm", action="store_true", help="nao usa LLM: usa os topics do diagnostico")
+    parser.add_argument("--git-backup", action="store_true", help="commita (e faz push) o vault num repositorio git")
     args = parser.parse_args()
-    print(json.dumps(sync_conversations_to_obsidian(use_llm=not args.no_llm), ensure_ascii=False, indent=2))
+    if args.git_backup:
+        print(json.dumps(backup_vault_to_git(), ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(sync_conversations_to_obsidian(use_llm=not args.no_llm), ensure_ascii=False, indent=2))

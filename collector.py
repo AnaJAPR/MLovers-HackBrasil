@@ -1,17 +1,28 @@
 """Coleta conversas dos logs locais (Claude Code, Codex) e dos exports em data/imports/
 (ChatGPT, Claude.ai, Gemini) para data/conversations.json no contrato do AGENTS.md.
-Nao usa rede nem LLM."""
+`run_web_extraction` usa o Agent SDK + Chrome DevTools MCP para extrair conversas do
+navegador logado (com pausa para login humano) e salvar em data/imports/."""
 import argparse
 import hashlib
 import json
 import re
+import shutil
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import anyio
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / "data"
 IMPORTS = DATA / "imports"
+SKILLS = BASE / "skills"
+WEB_STATE = DATA / "web_extraction_state.json"
+WEB_PROFILE = Path.home() / ".cognitive_wiki" / "chrome-profile"
+WEB_TOOLS = ["mcp__chrome-devtools__" + tool for tool in (
+    "new_page", "navigate_page", "list_pages", "select_page", "take_snapshot",
+    "evaluate_script", "wait_for", "click", "close_page")] + ["Write"]
 SYSTEM_REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
 # prefixos de blocos gerados pelo harness (nao sao fala humana)
 NOISE = ("<system-reminder", "<command-", "<local-command", "<task-notification", "<ide_",
@@ -320,7 +331,112 @@ def collect(limit=200):
     return convs
 
 
+def run_web_extraction(platform, limit=50, force=False):
+    """Extrai as conversas do usuario logado em `platform` pelo Chrome (Agent SDK + DevTools MCP).
+    Se cair na tela de login o agente devolve AGUARDANDO_LOGIN, a funcao pede o login humano e
+    retoma a mesma sessao. Grava data/imports/<platform>_web.json e atualiza conversations.json."""
+    if platform not in ("chatgpt", "claude", "gemini"):
+        return {"ok": False, "error": f"plataforma invalida: {platform}"}
+    try:
+        state = json.loads(WEB_STATE.read_text(encoding="utf-8")) if WEB_STATE.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    last = state.get(platform, "")
+    if last and not force:
+        try:
+            if datetime.now(timezone.utc) - datetime.fromisoformat(last) < timedelta(days=15):
+                return {"ok": True, "skipped": True, "last": last}
+        except (ValueError, TypeError):
+            pass  # data corrompida: refaz a extracao
+
+    skill_path = SKILLS / f"extract_{platform}.md"
+    try:
+        skill = skill_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return {"ok": False, "error": f"skill ausente {skill_path}: {exc}"}
+    IMPORTS.mkdir(parents=True, exist_ok=True)
+    target = IMPORTS / f"{platform}_web.json"
+    target.unlink(missing_ok=True)  # nao confundir arquivo antigo com o desta rodada
+
+    prompt = (
+        skill
+        + "\n\n## Destino desta execucao\n"
+        + f"- Salve a lista JSON em: {target}\n"
+        + f"- Extraia no maximo {limit} conversas.\n"
+        + f"- Raiz do projeto: {BASE}\n"
+        + "- Use apenas as ferramentas permitidas. Nao pergunte nada alem do login: se a tela de login"
+          " aparecer, responda AGUARDANDO_LOGIN e encerre o turno.\n"
+    )
+    npx = shutil.which("npx") or "npx"
+    options = ClaudeAgentOptions(
+        mcp_servers={"chrome-devtools": {
+            "command": npx,
+            "args": ["-y", "chrome-devtools-mcp@latest", "--user-data-dir", str(WEB_PROFILE)],
+        }},
+        allowed_tools=WEB_TOOLS,
+        permission_mode="acceptEdits",
+        cwd=str(BASE),
+        setting_sources=[],
+        extra_args={"no-session-persistence": None},
+        max_turns=60,
+    )
+
+    async def run():
+        text = ""
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(prompt)
+            async for msg in client.receive_response():
+                if isinstance(msg, ResultMessage):
+                    text = msg.result or ""
+            if "AGUARDANDO_LOGIN" not in text:
+                return text
+            # Pausa humana: o usuario loga na janela do Chrome; o agente confere a cada 15s (ate 5 min).
+            # Funciona igual chamado pelo app (botao) ou pela CLI, sem depender do terminal.
+            print("[web] tela de login detectada: faca login na janela do Chrome que abriu (aguardo ate 5 min)")
+            for _ in range(20):
+                await anyio.sleep(15)
+                await client.query(
+                    "Confira a pagina atual (take_snapshot). Se ainda estiver na tela de login, responda so"
+                    " AGUARDANDO_LOGIN. Se o usuario ja fez login, conclua a extracao no destino combinado."
+                )
+                async for msg in client.receive_response():
+                    if isinstance(msg, ResultMessage):
+                        text = msg.result or ""
+                if "AGUARDANDO_LOGIN" not in text:
+                    return text
+            return None
+        return text
+
+    try:
+        text = anyio.run(run)
+    except Exception as exc:
+        return {"ok": False, "error": f"falha no agente: {exc}"}
+    if text is None or "AGUARDANDO_LOGIN" in text:
+        return {"ok": False, "error": "login nao concluido"}
+    print(f"[web] agente: {' '.join((text or '').split())[:300]}")
+    try:
+        saved = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": f"arquivo nao gerado em {target}: {exc}"}
+    if not isinstance(saved, list):
+        return {"ok": False, "error": f"{target} nao contem uma lista JSON"}
+
+    state[platform] = datetime.now(timezone.utc).isoformat()
+    WEB_STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    collect()
+    return {"ok": True, "platform": platform, "file": str(target), "conversations": len(saved)}
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Coleta conversas locais e exports para data/conversations.json")
-    parser.add_argument("--limit", type=int, default=200)
-    collect(parser.parse_args().limit)
+    parser.add_argument("--limit", type=int, default=None, help="maximo de conversas (collect=200, --web=50)")
+    parser.add_argument("--web", choices=("chatgpt", "claude", "gemini"),
+                        help="extrai conversas do navegador antes de coletar")
+    parser.add_argument("--force", action="store_true", help="ignora o intervalo de 15 dias do --web")
+    args = parser.parse_args()
+    if args.web:
+        print(run_web_extraction(args.web, args.limit or 50, force=args.force))
+    else:
+        collect(args.limit or 200)

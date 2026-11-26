@@ -7,6 +7,7 @@ import os
 import re
 import sys
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -215,13 +216,17 @@ def run_cognitive_diagnosis(backend=None):
         except Exception:
             old = {}
     ids = [c.get("id") for c in conversations]
-    diagnoses, new = [], 0
-    for conv in conversations:
-        if old.get(conv.get("id"), {}).get("backend") == backend:  # cache so vale para o mesmo backend
-            diagnoses.append(old[conv["id"]])
-        else:
-            diagnoses.append(diagnose_conversation(conv, backend))
-            new += 1
+    # cache so vale para o mesmo backend
+    pending = [c for c in conversations if old.get(c.get("id"), {}).get("backend") != backend]
+    if backend == "claude" and len(pending) > 1:  # so a chamada HTTP paraleliza; local (GPU) e mock seguem sequenciais
+        with ThreadPoolExecutor(max_workers=6) as ex:
+            fresh = list(ex.map(lambda c: diagnose_conversation(c, backend), pending))
+    else:
+        fresh = [diagnose_conversation(c, backend) for c in pending]
+    new = len(fresh)
+    it = iter(fresh)
+    diagnoses = [old[c["id"]] if old.get(c.get("id"), {}).get("backend") == backend else next(it)
+                 for c in conversations]
     print(f"{new} novas, {len(ids) - new} do cache (backend {backend})")
 
     n = len(diagnoses) or 1

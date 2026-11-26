@@ -24,9 +24,14 @@ WEB_TOOLS = ["mcp__chrome-devtools__" + tool for tool in (
     "new_page", "navigate_page", "list_pages", "select_page", "take_snapshot",
     "evaluate_script", "wait_for", "click", "close_page")] + ["Write"]
 SYSTEM_REMINDER = re.compile(r"<system-reminder>.*?</system-reminder>", re.S)
+# bloco XML de harness no inicio da fala (tag com "_" ou "-": convencao do harness, nao HTML comum)
+HARNESS = re.compile(
+    r"^\s*(?:<(?P<open>[A-Za-z][\w-]*[_-][\w-]*)\b[^>]*>.*?</(?P=open)>\s*"
+    r"|<[A-Za-z][\w-]*[_-][\w-]*\b[^>]*/>\s*)", re.S)
 # prefixos de blocos gerados pelo harness (nao sao fala humana)
 NOISE = ("<system-reminder", "<command-", "<local-command", "<task-notification", "<ide_",
-         "<environment_context", "<user_instructions", "<permissions", "Caveat:", "# AGENTS.md")
+         "<external_", "<environment_context", "<user_instructions", "<permissions",
+         "Caveat:", "# AGENTS.md")
 
 
 def _iso(value):
@@ -54,7 +59,10 @@ def _text(content, noise=False):
     for block in content if isinstance(content, list) else [content]:
         text = block if isinstance(block, str) else block.get("text") if isinstance(block, dict) else None
         if isinstance(text, str):
-            text = (SYSTEM_REMINDER.sub(" ", text) if noise else text).strip()
+            if noise:
+                while (stripped := HARNESS.sub("", text)) != text:  # blocos podem vir em sequencia
+                    text = stripped
+                text = SYSTEM_REMINDER.sub(" ", text).strip()
             if text and not (noise and text.startswith(NOISE)):
                 parts.append(text)
     return "\n".join(parts)
@@ -74,6 +82,8 @@ def _session(source, session_id, title, messages, created_at=""):
     if not title:
         first = next(m["content"] for m in merged if m["role"] == "user")
         title = " ".join(first.split())[:60]
+    if title.startswith("<"):  # titulo nunca comeca com markup
+        title = " ".join(re.sub(r"<[^<>]*>", " ", title).split())[:60]
     return {
         "id": hashlib.sha1(f"{source}:{session_id}".encode("utf-8")).hexdigest()[:16],
         "source": source,

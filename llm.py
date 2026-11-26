@@ -19,13 +19,14 @@ except ImportError:
     SSL_CONTEXT = ssl.create_default_context()
 
 
-def ask_json(prompt: str, model: str | None = None):
-    """Manda um prompt ao Claude (sem ferramentas, 1 turno) e devolve o JSON (dict ou list) da resposta.
-    Levanta excecao se o Claude nao estiver disponivel; quem chama decide o fallback."""
+def ask_json(prompt: str, fast: bool = False):
+    """Manda um prompt ao LLM geral (sem ferramentas, 1 turno) e devolve o JSON (dict ou list) da resposta.
+    fast=True -> modelo rapido/barato para varredura (LLM_MODEL_FAST, padrao haiku);
+    senao -> modelo de decisao (LLM_MODEL, padrao sonnet). Levanta excecao se indisponivel."""
     options = ClaudeAgentOptions(
         tools=[], max_turns=1, setting_sources=[],
         extra_args={"no-session-persistence": None},  # nao poluir ~/.claude/projects (o collector leria como conversa)
-        model=model or os.getenv("LLM_MODEL", "haiku"),
+        model=os.getenv("LLM_MODEL_FAST", "haiku") if fast else os.getenv("LLM_MODEL", "sonnet"),
         system_prompt="Responda APENAS com JSON valido, sem markdown e sem texto extra.",
     )
 

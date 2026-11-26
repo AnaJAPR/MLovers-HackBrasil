@@ -5,6 +5,7 @@ navegador logado (com pausa para login humano) e salvar em data/imports/."""
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import zipfile
@@ -389,6 +390,7 @@ def run_web_extraction(platform, limit=50, force=False):
     )
     npx = shutil.which("npx") or "npx"
     options = ClaudeAgentOptions(
+        model=os.getenv("LLM_MODEL", "sonnet"),  # agente com tool calls = LLM geral de decisao
         mcp_servers={"chrome-devtools": {
             "command": npx,
             "args": ["-y", "chrome-devtools-mcp@latest", "--user-data-dir", str(WEB_PROFILE)],

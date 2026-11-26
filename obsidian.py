@@ -233,7 +233,7 @@ Conversa:
 Extraia de 1 a 5 conceitos TECNICOS e ESPECIFICOS realmente discutidos nesta conversa (nada generico como "Programacao" ou "Estudo"). No summary, escreva de 2 a 5 bullets em markdown sobre o que o usuario discutiu, aprendeu ou decidiu sobre esse conceito. Em related, liste titulos de conceitos relacionados.
 
 Responda APENAS com JSON: {{"concepts": [{{"title": "Nome Do Conceito", "summary": "- bullet 1\\n- bullet 2", "related": ["Outro Conceito"]}}]}}"""
-    answer = llm.ask_json(prompt)
+    answer = llm.ask_json(prompt, fast=True)  # varredura de todas as conversas: modelo rapido
     raw_concepts = answer.get("concepts") if isinstance(answer, dict) else answer
     concepts = []
     for item in raw_concepts or []:

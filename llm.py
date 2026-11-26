@@ -13,6 +13,7 @@ def ask_json(prompt: str, model: str | None = None):
     Levanta excecao se o Claude nao estiver disponivel; quem chama decide o fallback."""
     options = ClaudeAgentOptions(
         tools=[], max_turns=1, setting_sources=[],
+        extra_args={"no-session-persistence": None},  # nao poluir ~/.claude/projects (o collector leria como conversa)
         model=model or os.getenv("LLM_MODEL", "haiku"),
         system_prompt="Responda APENAS com JSON valido, sem markdown e sem texto extra.",
     )

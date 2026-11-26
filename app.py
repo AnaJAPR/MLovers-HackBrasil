@@ -9,8 +9,17 @@ import traceback
 import webbrowser
 from pathlib import Path
 
+import sys
+
 import uvicorn
 from fastapi import FastAPI, Request
+
+# Windows: console/redirecionamento em cp1252 quebra ao imprimir acentos/emoji das conversas.
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 from fastapi.responses import FileResponse, JSONResponse
 
 BASE = Path(__file__).resolve().parent

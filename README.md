@@ -79,6 +79,9 @@ python -m pip install fastapi uvicorn python-dotenv pyyaml claude-agent-sdk fast
 Copy-Item .env.example .env
 python app.py
 ```
+No Windows, para rodar os módulos pela linha de comando (`python diagnostics.py` etc.) sem erro de
+acentuação no console, ative o modo UTF-8 do Python uma vez por terminal: `$env:PYTHONUTF8 = "1"`
+(o `app.py` já faz isso sozinho).
 
 **macOS / Linux** — com uv e, abaixo, sem uv:
 ```bash

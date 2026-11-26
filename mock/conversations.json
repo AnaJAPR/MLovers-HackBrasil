@@ -1,0 +1,185 @@
+[
+  {
+    "id": "c1",
+    "source": "claude_code",
+    "title": "Backend de autenticacao",
+    "created_at": "2026-11-20T10:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "faz o backend inteiro de autenticacao com JWT em FastAPI, nao precisa me explicar nada, so manda o codigo pronto",
+        "timestamp": "2026-11-20T10:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Aqui esta o backend completo com FastAPI, JWT (python-jose), hash de senha com bcrypt e rotas /login e /register...",
+        "timestamp": "2026-11-20T10:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "agora faz o refresh token tambem",
+        "timestamp": "2026-11-20T10:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Adicionei o endpoint /refresh com rotacao de refresh tokens armazenados...",
+        "timestamp": "2026-11-20T10:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "ok, faz os testes tambem",
+        "timestamp": "2026-11-20T10:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "c2",
+    "source": "codex",
+    "title": "Erro de CUDA no treino",
+    "created_at": "2026-11-21T14:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "meu treino com PyTorch da CUDA out of memory no batch 32, como resolvo?",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Reduza o batch size, use gradient accumulation ou mixed precision com torch.autocast...",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "nao funcionou, continua dando out of memory",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Tente gradient checkpointing com model.gradient_checkpointing_enable()...",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "ainda da erro, tenta outra coisa",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Verifique se ha tensores acumulando no grafo; use loss.item() ao logar...",
+        "timestamp": "2026-11-21T14:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "continua o mesmo erro, so arruma ai",
+        "timestamp": "2026-11-21T14:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "c3",
+    "source": "chatgpt_web",
+    "title": "Intuicao do attention",
+    "created_at": "2026-11-22T09:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "por que o custo do attention cresce quadraticamente com o tamanho da sequencia? quero entender a intuicao antes de ver a formula",
+        "timestamp": "2026-11-22T09:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Cada token compara sua query com a key de todos os outros tokens, entao sao n x n comparacoes...",
+        "timestamp": "2026-11-22T09:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "entao se eu uso sliding window cada token so olha k vizinhos e vira n vezes k? qual o custo disso na qualidade?",
+        "timestamp": "2026-11-22T09:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Exato, O(n*k). O custo e perder dependencias longas, que modelos como Longformer compensam com tokens globais...",
+        "timestamp": "2026-11-22T09:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "c4",
+    "source": "claude_web",
+    "title": "Grafo de conhecimento com Obsidian",
+    "created_at": "2026-11-23T16:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "minha ideia e montar um grafo de conhecimento no Obsidian a partir das minhas conversas; ja escrevi o parser de wikilinks e pensei em usar o grau dos nos para achar os temas centrais. faz sentido ou tem um jeito melhor?",
+        "timestamp": "2026-11-23T16:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Faz sentido como primeira aproximacao. Grau favorece hubs; PageRank captura importancia indireta...",
+        "timestamp": "2026-11-23T16:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "boa, vou testar os dois e comparar. pode revisar meu parser? acho que ele quebra com alias tipo [[Nota|apelido]]",
+        "timestamp": "2026-11-23T16:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Seu regex captura o alias junto. Separe no primeiro | e use so a parte da esquerda...",
+        "timestamp": "2026-11-23T16:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "c5",
+    "source": "gemini_web",
+    "title": "Resumo de artigo",
+    "created_at": "2026-11-24T20:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "resume esse artigo sobre RLHF pra mim que eu nao vou ler, so preciso saber o que falar na reuniao",
+        "timestamp": "2026-11-24T20:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Resumo: o artigo compara RLHF com DPO e mostra que DPO e mais estavel...",
+        "timestamp": "2026-11-24T20:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "escreve tambem 3 perguntas inteligentes pra eu fazer na reuniao",
+        "timestamp": "2026-11-24T20:00:00Z"
+      }
+    ]
+  },
+  {
+    "id": "c6",
+    "source": "claude_code",
+    "title": "Servidor MCP",
+    "created_at": "2026-11-25T11:00:00Z",
+    "messages": [
+      {
+        "role": "user",
+        "content": "quero expor meu vault do Obsidian via MCP. eu li a doc do fastmcp e acho que preciso de uma tool search_wiki e outra read_node; me ajuda a decidir se busca por substring basta ou se vale embeddings",
+        "timestamp": "2026-11-25T11:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Para algumas centenas de notas, substring e suficiente e muito mais simples...",
+        "timestamp": "2026-11-25T11:00:00Z"
+      },
+      {
+        "role": "user",
+        "content": "concordo, vou de substring. escrevi a tool assim, ve se o tratamento de encoding esta certo no Windows",
+        "timestamp": "2026-11-25T11:00:00Z"
+      },
+      {
+        "role": "assistant",
+        "content": "Esta quase certo: adicione encoding='utf-8' no read_text...",
+        "timestamp": "2026-11-25T11:00:00Z"
+      }
+    ]
+  }
+]

@@ -1,0 +1,19 @@
+[project]
+name = "cognitive-wiki-os"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "pyyaml",
+    "claude-agent-sdk",
+    "fastmcp",
+    "firecrawl-py",
+    "resend",
+    "abacatepay",
+]
+
+[project.optional-dependencies]
+# so na maquina de treino (GPU)
+train = ["torch", "transformers", "peft", "trl", "accelerate", "datasets", "matplotlib"]
